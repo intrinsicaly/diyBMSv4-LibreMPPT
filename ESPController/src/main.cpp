@@ -2643,7 +2643,7 @@ static const char *ESP32_TWAI_STATUS_STRINGS[] = {
     "RECOVERY UNDERWAY"      // CAN_STATE_RECOVERING
 };
 
-void _send_canbus_message(const uint32_t identifier, const uint8_t *buffer, const uint8_t length, const uint32_t flags)
+bool _send_canbus_message(const uint32_t identifier, const uint8_t *buffer, const uint8_t length, const uint32_t flags)
 {
   twai_message_t message;
   message.identifier = identifier;
@@ -2662,7 +2662,7 @@ void _send_canbus_message(const uint32_t identifier, const uint8_t *buffer, cons
     // ESP_LOGD(TAG, "Sent CAN message 0x%x", identifier);
     // ESP_LOG_BUFFER_HEX_LEVEL(TAG, &message, sizeof(twai_message_t), esp_log_level_t::ESP_LOG_DEBUG);
     canbus_messages_sent++;
-    return;
+    return true;
   }
 
   // Something failed....
@@ -2697,15 +2697,20 @@ void _send_canbus_message(const uint32_t identifier, const uint8_t *buffer, cons
     // when the bus is in recovery mode transmit is not possible, so wait...
     vTaskDelay(pdMS_TO_TICKS(250));
   }
+  return false;
 }
 
 void send_canbus_message(const uint32_t identifier, const uint8_t *buffer, const uint8_t length)
 {
   _send_canbus_message(identifier, buffer, length, TWAI_MSG_FLAG_NONE);
 }
-void send_ext_canbus_message(const uint32_t identifier, const uint8_t *buffer, const uint8_t length)
+bool send_ext_canbus_message(const uint32_t identifier, const uint8_t *buffer, const uint8_t length)
 {
-  _send_canbus_message(identifier, buffer, length, TWAI_MSG_FLAG_EXTD);
+  if (!buffer || length == 0 || length > 8) {
+    ESP_LOGE(TAG, "Invalid CAN message parameters: buffer=%p, len=%u", buffer, length);
+    return false;
+  }
+  return _send_canbus_message(identifier, buffer, length, TWAI_MSG_FLAG_EXTD);
 }
 
 [[noreturn]] void canbus_tx(void *)

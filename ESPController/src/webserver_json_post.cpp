@@ -836,31 +836,88 @@ esp_err_t post_savecmadvanced_json_handler(httpd_req_t *req, bool urlEncoded)
     // Set everything to zero/false
     memset(&newvalues, 0, sizeof(currentmonitoring_struct));
 
-    // TODO: We need more validation here to check values are correct and all supplied.
+    bool validation_passed = true;
 
-    if (GetKeyValue(httpbuf, "cmcalibration", &newvalues.modbus.shuntcal, urlEncoded))
-    {
+    if (GetKeyValue(httpbuf, "cmcalibration", &newvalues.modbus.shuntcal, urlEncoded)) {
+        if (newvalues.modbus.shuntcal < 1) {
+            ESP_LOGE(TAG, "Shunt calibration out of range: %u", newvalues.modbus.shuntcal);
+            validation_passed = false;
+        }
+    } else {
+        validation_passed = false;
     }
-    if (GetKeyValue(httpbuf, "cmtemplimit", &newvalues.modbus.temperaturelimit, urlEncoded))
-    {
+
+    if (GetKeyValue(httpbuf, "cmtemplimit", &newvalues.modbus.temperaturelimit, urlEncoded)) {
+        if (newvalues.modbus.temperaturelimit < -40 || newvalues.modbus.temperaturelimit > 125) {
+            ESP_LOGE(TAG, "Temperature limit out of range: %d", newvalues.modbus.temperaturelimit);
+            validation_passed = false;
+        }
+    } else {
+        validation_passed = false;
     }
-    if (GetKeyValue(httpbuf, "cmundervlimit", &newvalues.modbus.undervoltagelimit, urlEncoded))
-    {
+
+    if (GetKeyValue(httpbuf, "cmundervlimit", &newvalues.modbus.undervoltagelimit, urlEncoded)) {
+        if (newvalues.modbus.undervoltagelimit < 0.0f || newvalues.modbus.undervoltagelimit > 200.0f) {
+            ESP_LOGE(TAG, "Under-voltage limit out of range: %.2f", newvalues.modbus.undervoltagelimit);
+            validation_passed = false;
+        }
+    } else {
+        validation_passed = false;
     }
-    if (GetKeyValue(httpbuf, "cmovervlimit", &newvalues.modbus.overvoltagelimit, urlEncoded))
-    {
+
+    if (GetKeyValue(httpbuf, "cmovervlimit", &newvalues.modbus.overvoltagelimit, urlEncoded)) {
+        if (newvalues.modbus.overvoltagelimit < 0.0f || newvalues.modbus.overvoltagelimit > 200.0f) {
+            ESP_LOGE(TAG, "Over-voltage limit out of range: %.2f", newvalues.modbus.overvoltagelimit);
+            validation_passed = false;
+        }
+    } else {
+        validation_passed = false;
     }
-    if (GetKeyValue(httpbuf, "cmoverclimit", &newvalues.modbus.overcurrentlimit, urlEncoded))
-    {
+
+    if (validation_passed && newvalues.modbus.undervoltagelimit >= newvalues.modbus.overvoltagelimit) {
+        ESP_LOGE(TAG, "Under-voltage must be less than over-voltage");
+        validation_passed = false;
     }
-    if (GetKeyValue(httpbuf, "cmunderclimit", &newvalues.modbus.undercurrentlimit, urlEncoded))
-    {
+
+    if (GetKeyValue(httpbuf, "cmoverclimit", &newvalues.modbus.overcurrentlimit, urlEncoded)) {
+        if (newvalues.modbus.overcurrentlimit < -100.0f || newvalues.modbus.overcurrentlimit > 100.0f) {
+            ESP_LOGE(TAG, "Over-current limit out of range: %.2f", newvalues.modbus.overcurrentlimit);
+            validation_passed = false;
+        }
+    } else {
+        validation_passed = false;
     }
-    if (GetKeyValue(httpbuf, "cmoverplimit", &newvalues.modbus.overpowerlimit, urlEncoded))
-    {
+
+    if (GetKeyValue(httpbuf, "cmunderclimit", &newvalues.modbus.undercurrentlimit, urlEncoded)) {
+        if (newvalues.modbus.undercurrentlimit < -100.0f || newvalues.modbus.undercurrentlimit > 100.0f) {
+            ESP_LOGE(TAG, "Under-current limit out of range: %.2f", newvalues.modbus.undercurrentlimit);
+            validation_passed = false;
+        }
+    } else {
+        validation_passed = false;
     }
-    if (GetKeyValue(httpbuf, "cmtempcoeff", &newvalues.modbus.shunttempcoefficient, urlEncoded))
-    {
+
+    if (GetKeyValue(httpbuf, "cmoverplimit", &newvalues.modbus.overpowerlimit, urlEncoded)) {
+        if (newvalues.modbus.overpowerlimit < 0.0f || newvalues.modbus.overpowerlimit > 1000000.0f) {
+            ESP_LOGE(TAG, "Over-power limit out of range: %.2f", newvalues.modbus.overpowerlimit);
+            validation_passed = false;
+        }
+    } else {
+        validation_passed = false;
+    }
+
+    if (GetKeyValue(httpbuf, "cmtempcoeff", &newvalues.modbus.shunttempcoefficient, urlEncoded)) {
+        if (newvalues.modbus.shunttempcoefficient > 1000) {
+            ESP_LOGE(TAG, "Temperature coefficient out of range: %u", newvalues.modbus.shunttempcoefficient);
+            validation_passed = false;
+        }
+    } else {
+        validation_passed = false;
+    }
+
+    if (!validation_passed) {
+        ESP_LOGE(TAG, "Current monitor advanced settings validation failed");
+        return SendFailure(req);
     }
 
     CurrentMonitorSetAdvancedSettings(newvalues);

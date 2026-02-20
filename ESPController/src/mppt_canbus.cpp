@@ -22,9 +22,28 @@ MPPTManager::MPPTManager()
 
 void MPPTManager::init(const diybms_eeprom_settings *settings, Rules *rules)
 {
+    if (!settings || !rules) {
+        ESP_LOGE(TAG, "NULL settings or rules pointer passed to MPPTManager::init");
+        return;
+    }
+
     _settings = settings;
     _rules = rules;
-    ESP_LOGI(TAG, "MPPT Manager initialized, enabled=%d", settings->mppt_can_enabled);
+
+    if (_settings->mppt_target_voltage < 4000 || _settings->mppt_target_voltage > 7000) {
+        ESP_LOGW(TAG, "MPPT target voltage (%u mV) out of safe range [4000-7000]; using configured value",
+                 _settings->mppt_target_voltage);
+    }
+
+    if (_settings->mppt_max_charge_current > 10000) {
+        ESP_LOGW(TAG, "MPPT max charge current (%u) out of safe range [0-10000]; using configured value",
+                 _settings->mppt_max_charge_current);
+    }
+
+    ESP_LOGI(TAG, "MPPT Manager initialized, enabled=%d, target_V=%u mV, max_I=%u",
+             _settings->mppt_can_enabled,
+             _settings->mppt_target_voltage,
+             _settings->mppt_max_charge_current);
 }
 
 void MPPTManager::update()
@@ -81,6 +100,11 @@ void MPPTManager::update()
 void MPPTManager::processReceivedMessage(const twai_message_t *msg)
 {
     if (!_settings || !_settings->mppt_can_enabled) return;
+
+    if (!msg || msg->data_length_code > 8) {
+        ESP_LOGE(TAG, "Invalid CAN message: NULL pointer or invalid DLC");
+        return;
+    }
 
     uint32_t id = msg->identifier;
 
@@ -211,8 +235,11 @@ void MPPTManager::sendDiscovery()
     // Broadcast node ID query
     uint32_t can_id = THINGSET_REQRESP_BASE | (5UL << 20) | THINGSET_BROADCAST_ID;
     uint8_t buf[] = {0xA1, 0x19, 0x1D, 0x00};
-    send_ext_canbus_message(can_id, buf, sizeof(buf));
-    ESP_LOGD(TAG, "MPPT discovery broadcast sent");
+    if (!send_ext_canbus_message(can_id, buf, sizeof(buf))) {
+        ESP_LOGW(TAG, "Failed to send MPPT discovery broadcast");
+    } else {
+        ESP_LOGD(TAG, "MPPT discovery broadcast sent");
+    }
 }
 
 void MPPTManager::checkTimeouts()
@@ -301,7 +328,9 @@ void MPPTManager::encodeCborBool(uint8_t *buf, uint8_t &pos, uint16_t obj_id, bo
 void MPPTManager::sendThingSetRequest(uint16_t target_id, const uint8_t *data, uint8_t len)
 {
     uint32_t can_id = THINGSET_REQRESP_BASE | (5UL << 20) | ((uint32_t)target_id & 0xFFFF);
-    send_ext_canbus_message(can_id, data, len);
+    if (!send_ext_canbus_message(can_id, data, len)) {
+        ESP_LOGW(TAG, "Failed to send ThingSet request to 0x%04X", target_id);
+    }
 }
 
 #ifdef MPPT_MOCK_MODE
