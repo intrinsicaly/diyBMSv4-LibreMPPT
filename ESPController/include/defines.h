@@ -270,6 +270,17 @@ struct diybms_eeprom_settings
   uint16_t soh_estimated_battery_cycles;  
   /// @brief Calculated percentage calculation of health 
   float soh_percent;
+
+  // MPPT CAN bus settings
+  bool mppt_can_enabled;
+  uint16_t mppt_target_voltage;      // Scale 0.1V (560 = 56.0V)
+  uint16_t mppt_max_charge_current;  // Scale 0.1A (200 = 20.0A)
+  uint16_t mppt_absorption_voltage;  // Scale 0.1V (565 = 56.5V)
+  uint16_t mppt_float_voltage;       // Scale 0.1V (540 = 54.0V)
+  uint16_t mppt_timeout_seconds;
+  uint8_t mppt_timeout_action;       // 0=stop, 1=continue, 2=local
+  bool mppt_mock_mode_enabled;
+  uint8_t mppt_mock_device_count;
 };
 
 typedef union

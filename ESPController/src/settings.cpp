@@ -98,6 +98,16 @@ static const char soh_lifetime_battery_cycles_JSONKEY[] = "soh_batcycle";
 
 static const char soh_eol_capacity_JSONKEY[] = "soh_eol_capacity";
 
+static const char mppt_can_enabled_JSONKEY[] = "mppt_enabled";
+static const char mppt_target_voltage_JSONKEY[] = "mppt_target_v";
+static const char mppt_max_charge_current_JSONKEY[] = "mppt_max_i";
+static const char mppt_absorption_voltage_JSONKEY[] = "mppt_abs_v";
+static const char mppt_float_voltage_JSONKEY[] = "mppt_float_v";
+static const char mppt_timeout_seconds_JSONKEY[] = "mppt_timeout";
+static const char mppt_timeout_action_JSONKEY[] = "mppt_t_action";
+static const char mppt_mock_mode_enabled_JSONKEY[] = "mppt_mock";
+static const char mppt_mock_device_count_JSONKEY[] = "mppt_mock_cnt";
+
 
 
 /* NVS KEYS
@@ -196,6 +206,16 @@ static const char soh_total_milliamphour_out_NVSKEY[] = "soh_mah_out";
 static const char soh_total_milliamphour_in_NVSKEY[] = "soh_mah_in";
 static const char soh_lifetime_battery_cycles_NVSKEY[] = "soh_batcycle";
 static const char soh_eol_capacity_NVSKEY[] = "soh_eol_cap";
+
+static const char mppt_can_enabled_NVSKEY[] = "mppt_enabled";
+static const char mppt_target_voltage_NVSKEY[] = "mppt_target_v";
+static const char mppt_max_charge_current_NVSKEY[] = "mppt_max_i";
+static const char mppt_absorption_voltage_NVSKEY[] = "mppt_abs_v";
+static const char mppt_float_voltage_NVSKEY[] = "mppt_float_v";
+static const char mppt_timeout_seconds_NVSKEY[] = "mppt_timeout";
+static const char mppt_timeout_action_NVSKEY[] = "mppt_t_action";
+static const char mppt_mock_mode_enabled_NVSKEY[] = "mppt_mock";
+static const char mppt_mock_device_count_NVSKEY[] = "mppt_mock_cnt";
 
 static const char soc_milliamphour_out_NVSKEY[] = "soc_mah_out";
 static const char soc_milliamphour_in_NVSKEY[] = "soc_mah_in";
@@ -528,6 +548,16 @@ void SaveConfiguration(const diybms_eeprom_settings *settings)
         MACRO_NVSWRITE(soh_lifetime_battery_cycles)
         MACRO_NVSWRITE_UINT8(soh_eol_capacity)
 
+        MACRO_NVSWRITE(mppt_can_enabled)
+        MACRO_NVSWRITE(mppt_target_voltage)
+        MACRO_NVSWRITE(mppt_max_charge_current)
+        MACRO_NVSWRITE(mppt_absorption_voltage)
+        MACRO_NVSWRITE(mppt_float_voltage)
+        MACRO_NVSWRITE(mppt_timeout_seconds)
+        MACRO_NVSWRITE_UINT8(mppt_timeout_action)
+        MACRO_NVSWRITE(mppt_mock_mode_enabled)
+        MACRO_NVSWRITE_UINT8(mppt_mock_device_count)
+
         ESP_ERROR_CHECK(nvs_commit(nvs_handle));
         nvs_close(nvs_handle);
     }
@@ -663,6 +693,16 @@ void LoadConfiguration(diybms_eeprom_settings *settings)
         MACRO_NVSREAD(soh_total_milliamphour_in)
         MACRO_NVSREAD(soh_lifetime_battery_cycles)
         MACRO_NVSREAD_UINT8(soh_eol_capacity)
+
+        MACRO_NVSREAD(mppt_can_enabled)
+        MACRO_NVSREAD(mppt_target_voltage)
+        MACRO_NVSREAD(mppt_max_charge_current)
+        MACRO_NVSREAD(mppt_absorption_voltage)
+        MACRO_NVSREAD(mppt_float_voltage)
+        MACRO_NVSREAD(mppt_timeout_seconds)
+        MACRO_NVSREAD_UINT8(mppt_timeout_action)
+        MACRO_NVSREAD(mppt_mock_mode_enabled)
+        MACRO_NVSREAD_UINT8(mppt_mock_device_count)
         nvs_close(nvs_handle);
     }
 
@@ -852,6 +892,16 @@ void DefaultConfiguration(diybms_eeprom_settings *_myset)
     _myset->soh_lifetime_battery_cycles = 6000;
     _myset->soh_eol_capacity = 80;
     _myset->soh_percent = 100.0F;
+
+    _myset->mppt_can_enabled = false;
+    _myset->mppt_target_voltage = 560;      // 56.0V
+    _myset->mppt_max_charge_current = 200;  // 20.0A
+    _myset->mppt_absorption_voltage = 565;  // 56.5V
+    _myset->mppt_float_voltage = 540;       // 54.0V
+    _myset->mppt_timeout_seconds = 10;
+    _myset->mppt_timeout_action = 0;
+    _myset->mppt_mock_mode_enabled = false;
+    _myset->mppt_mock_device_count = 2;
 }
 
 /// @brief Save WIFI settings into FLASH NVS
