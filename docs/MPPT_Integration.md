@@ -13,7 +13,7 @@ Communication uses the [ThingSet protocol](https://thingset.io/) over CAN Bus wi
 - **PubSub messages** (base `0x1E000000`): Telemetry published by MPPT devices
 - **ReqResp messages** (base `0x1D000000`): Commands sent by the BMS controller
 
-MPPT device node IDs are expected in the range `0x0010`–`0x001F` (up to 16 devices; `MAX_MPPT_DEVICES` = 4 are tracked).
+MPPT device node IDs are expected in the range `0x0010`–`0x001F` (the protocol supports up to 16 node IDs in this range; the implementation tracks a maximum of `MAX_MPPT_DEVICES` = 4 devices simultaneously).
 
 Data is CBOR-encoded. Supported object IDs:
 

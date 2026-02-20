@@ -184,14 +184,67 @@ esp_err_t default_htm_handler(httpd_req_t *req)
   return e;
 }
 
-// Simple handler for mppt.htm (no template processing needed)
+// Handler for mppt.htm - replaces %XSS_KEY% template variable like default_htm_handler
 esp_err_t mppt_htm_handler(httpd_req_t *req)
 {
   httpd_resp_set_type(req, "text/html");
   setNoStoreCacheControl(req);
   setCookie(req);
   ESP_LOGI(TAG, "mppt.htm");
-  return httpd_resp_send(req, (const char *)file_mppt_htm, size_file_mppt_htm);
+
+  const char *file_pointer = (const char *)file_mppt_htm;
+  size_t max_len = size_file_mppt_htm;
+  const char *end_pointer = file_pointer + max_len;
+  const char *p = file_pointer;
+
+  while (p < end_pointer)
+  {
+    char *start_ptr = (char *)memchr(p, '%', end_pointer - p);
+    if (start_ptr != NULL)
+    {
+      httpd_resp_send_chunk(req, p, start_ptr - p);
+      p = start_ptr + 1;
+      char *end_ptr = (char *)memchr(p, '%', end_pointer - p);
+      if (end_ptr != NULL)
+      {
+        int paramNameLength = end_ptr - p;
+        if (paramNameLength > 0)
+        {
+          char buf[50 + 1];
+          memcpy(buf, p, paramNameLength);
+          buf[paramNameLength] = 0;
+          if (strncmp(buf, "XSS_KEY", 7) == 0)
+          {
+            httpd_resp_sendstr_chunk(req, CookieValue);
+          }
+          else
+          {
+            httpd_resp_sendstr_chunk(req, "");
+          }
+        }
+        else
+        {
+          httpd_resp_sendstr_chunk(req, "%");
+        }
+        p = end_ptr + 1;
+      }
+      else
+      {
+        break;
+      }
+    }
+    else
+    {
+      break;
+    }
+  }
+
+  if (p < end_pointer)
+  {
+    httpd_resp_send_chunk(req, p, end_pointer - p);
+  }
+
+  return httpd_resp_send_chunk(req, NULL, 0);
 }
 
 void SetCacheAndETag(httpd_req_t *req, const char *ETag)

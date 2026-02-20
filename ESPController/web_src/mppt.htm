@@ -7,6 +7,7 @@
 <link rel="stylesheet" href="style.css">
 <script src="jquery.js"></script>
 <script src="pagecode.js"></script>
+<script>var XSS_KEY = '%XSS_KEY%';</script>
 </head>
 <body>
 <div id="nav"></div>
@@ -17,8 +18,8 @@
 <h2>Settings</h2>
 <form id="mppt-form">
 <label>Enable MPPT CAN control: <input type="checkbox" id="mpptEnabled" name="mpptEnabled"></label><br>
-<label>Target voltage (V): <input type="number" id="mpptTargetV_display" min="0" max="100" step="0.1"> <small id="mpptTargetV_raw"></small><input type="hidden" id="mpptTargetV" name="mpptTargetV"></label><br>
-<label>Max charge current (A): <input type="number" id="mpptMaxI_display" min="0" max="1000" step="0.1"> <small id="mpptMaxI_raw"></small><input type="hidden" id="mpptMaxI" name="mpptMaxI"></label><br>
+<label>Target voltage (V): <input type="number" id="mpptTargetV_display" min="0" max="100" step="0.1"> <input type="hidden" id="mpptTargetV" name="mpptTargetV"></label><br>
+<label>Max charge current (A): <input type="number" id="mpptMaxI_display" min="0" max="1000" step="0.1"> <input type="hidden" id="mpptMaxI" name="mpptMaxI"></label><br>
 <label>Absorption voltage (V): <input type="number" id="mpptAbsV_display" min="0" max="100" step="0.1"> <input type="hidden" id="mpptAbsV" name="mpptAbsV"></label><br>
 <label>Float voltage (V): <input type="number" id="mpptFloatV_display" min="0" max="100" step="0.1"> <input type="hidden" id="mpptFloatV" name="mpptFloatV"></label><br>
 <label>Timeout (seconds): <input type="number" id="mpptTimeout" name="mpptTimeout" min="1" max="3600"></label><br>
@@ -54,7 +55,7 @@ function loadMPPTData() {
     $('#mpptFloatV').val(Math.round(data.float_voltage * 10));
     $('#mpptTimeout').val(data.timeout);
     $('#mpptTimeoutAction').val(data.timeout_action);
-    $('#mpptMockCount').val(data.count || 2);
+    $('#mpptMockCount').val(data.mock_count || 2);
 
     var html = '';
     if (!data.devices || data.devices.length === 0) {
@@ -62,7 +63,7 @@ function loadMPPTData() {
     } else {
       data.devices.forEach(function(d) {
         var statusStr = ['Offline','Online','Timeout'][d.status] || 'Unknown';
-        html += '<div class="device-card">';
+        html += '<div class="card">';
         html += '<b>MPPT 0x' + d.id.toString(16).toUpperCase() + '</b> - ' + statusStr + '<br>';
         html += 'Solar: ' + d.solar_v.toFixed(1) + 'V / ' + d.solar_i.toFixed(1) + 'A / ' + d.solar_p.toFixed(0) + 'W<br>';
         html += 'Battery: ' + d.bat_v.toFixed(2) + 'V / ' + d.bat_i.toFixed(1) + 'A<br>';
@@ -79,7 +80,6 @@ function loadMPPTData() {
 }
 
 function saveMPPTSettings() {
-  // Convert display values (V/A) to scaled integers (x10) for storage
   $('#mpptTargetV').val(Math.round(parseFloat($('#mpptTargetV_display').val()) * 10));
   $('#mpptMaxI').val(Math.round(parseFloat($('#mpptMaxI_display').val()) * 10));
   $('#mpptAbsV').val(Math.round(parseFloat($('#mpptAbsV_display').val()) * 10));
@@ -87,7 +87,8 @@ function saveMPPTSettings() {
 
   var enabled = $('#mpptEnabled').is(':checked') ? 'on' : '';
   var mock = $('#mpptMockMode').is(':checked') ? 'on' : '';
-  var data = 'mpptEnabled=' + enabled +
+  var data = 'xss=' + encodeURIComponent(XSS_KEY) +
+    '&mpptEnabled=' + enabled +
     '&mpptMockMode=' + mock +
     '&mpptTargetV=' + $('#mpptTargetV').val() +
     '&mpptMaxI=' + $('#mpptMaxI').val() +
@@ -96,12 +97,18 @@ function saveMPPTSettings() {
     '&mpptTimeout=' + $('#mpptTimeout').val() +
     '&mpptTimeoutAction=' + $('#mpptTimeoutAction').val() +
     '&mpptMockCount=' + $('#mpptMockCount').val();
-  $.post('/post/savemppt', data, function() { alert('Saved'); }).fail(function() { alert('Save failed'); });
+  $.ajax({url:'/post/savemppt', method:'POST', data:data,
+    contentType:'application/x-www-form-urlencoded',
+    success:function(){alert('Saved');},
+    error:function(){alert('Save failed');}});
 }
 
 function controlMPPT(id, enable) {
-  $.post('/post/mpptcontrol', 'id=' + id + '&enable=' + (enable ? 'true' : 'false'),
-    function() { loadMPPTData(); }).fail(function() { alert('Control failed'); });
+  var data = 'xss=' + encodeURIComponent(XSS_KEY) + '&id=' + id + '&enable=' + (enable ? 'on' : '');
+  $.ajax({url:'/post/mpptcontrol', method:'POST', data:data,
+    contentType:'application/x-www-form-urlencoded',
+    success:function(){loadMPPTData();},
+    error:function(){alert('Control failed');}});
 }
 
 $(document).ready(function() {

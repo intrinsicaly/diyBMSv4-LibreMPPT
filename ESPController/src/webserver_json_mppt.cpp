@@ -16,7 +16,7 @@ esp_err_t content_handler_mppt(httpd_req_t *req)
                            "\"target_voltage\":%.1f,\"max_current\":%.1f,"
                            "\"abs_voltage\":%.1f,\"float_voltage\":%.1f,"
                            "\"timeout\":%u,\"timeout_action\":%u,"
-                           "\"count\":%u,\"devices\":[",
+                           "\"mock_count\":%u,\"count\":%u,\"devices\":[",
                            mysettings.mppt_can_enabled ? "true" : "false",
                            mysettings.mppt_mock_mode_enabled ? "true" : "false",
                            mysettings.mppt_target_voltage / 10.0f,
@@ -25,6 +25,7 @@ esp_err_t content_handler_mppt(httpd_req_t *req)
                            mysettings.mppt_float_voltage / 10.0f,
                            mysettings.mppt_timeout_seconds,
                            mysettings.mppt_timeout_action,
+                           mysettings.mppt_mock_device_count,
                            mppt_manager.getDeviceCount());
 
     if (xSemaphoreTake(mppt_manager.mutex, pdMS_TO_TICKS(100)) == pdTRUE)

@@ -2805,9 +2805,9 @@ void send_ext_canbus_message(const uint32_t identifier, const uint8_t *buffer, c
 {
   for (;;)
   {
-    while (mysettings.protocol == ProtocolEmulation::EMULATION_DISABLED || mysettings.protocol == ProtocolEmulation::RS485_PYLONTECH)
+    while ((mysettings.protocol == ProtocolEmulation::EMULATION_DISABLED || mysettings.protocol == ProtocolEmulation::RS485_PYLONTECH) && !mysettings.mppt_can_enabled)
     {
-      // Canbus is disbled, sleep until this changes....
+      // Canbus is disabled and MPPT not active, sleep until this changes....
       vTaskDelay(pdMS_TO_TICKS(2000));
     }
 
@@ -3771,6 +3771,7 @@ void resumeTasksAfterFirmwareUpdateFailure()
   vTaskResume(transmit_task_handle);
   vTaskResume(lazy_task_handle);
   vTaskResume(canbus_rx_task_handle);
+  vTaskResume(mppt_can_task_handle);
 }
 void suspendTasksDuringFirmwareUpdate()
 {
@@ -3784,6 +3785,7 @@ void suspendTasksDuringFirmwareUpdate()
   vTaskSuspend(transmit_task_handle);
   vTaskSuspend(lazy_task_handle);
   vTaskSuspend(canbus_rx_task_handle);
+  vTaskSuspend(mppt_can_task_handle);
 }
 
 void setup()

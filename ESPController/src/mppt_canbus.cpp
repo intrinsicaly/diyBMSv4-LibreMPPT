@@ -327,7 +327,7 @@ void MPPTManager::updateMockDevices()
             _devices[i].charging_enabled = true;
 
             float base_solar_v = 35.0f + (float)(i * 2);
-            float base_solar_i = 8.0f + (float)(i) * 0.5f;
+            float base_solar_i = 8.0f + (float)(i * 1) * 0.5f;
             _devices[i].solar_voltage = base_solar_v + (float)(now / 1000000 % 3);
             _devices[i].solar_current = base_solar_i + (float)(now / 2000000 % 2);
             _devices[i].solar_power = _devices[i].solar_voltage * _devices[i].solar_current;
