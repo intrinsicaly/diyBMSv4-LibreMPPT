@@ -1,0 +1,63 @@
+name: Unit Tests
+
+on:
+  push:
+    branches: [ main, develop ]
+    paths-ignore:
+      - "**.md"
+  pull_request:
+    branches: [ main, develop ]
+    paths-ignore:
+      - "**.md"
+
+jobs:
+  test:
+    name: Run Unit Tests
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y cmake build-essential lcov
+
+      - name: Clone Unity test framework
+        run: |
+          cd ESPController/test
+          git clone https://github.com/ThrowTheSwitch/Unity.git unity
+
+      - name: Configure CMake
+        run: |
+          cd ESPController/test
+          cmake -B build -DENABLE_COVERAGE=ON
+
+      - name: Build tests
+        run: cmake --build ESPController/test/build --parallel
+
+      - name: Run tests
+        run: |
+          cd ESPController/test/build
+          ./run_tests
+
+      - name: Generate coverage report
+        if: success()
+        run: |
+          cd ESPController/test/build
+          lcov --capture --directory . --output-file coverage.info
+          lcov --remove coverage.info '/usr/*' --output-file coverage.info
+          lcov --remove coverage.info '*/test/*' --output-file coverage.info
+          lcov --list coverage.info
+
+      - name: Upload coverage to Codecov
+        if: success()
+        uses: codecov/codecov-action@v4
+        with:
+          files: ESPController/test/build/coverage.info
+          flags: unittests
+          name: codecov-diyBMS
+        continue-on-error: true
