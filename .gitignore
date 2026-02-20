@@ -56,3 +56,4 @@ dkms.conf
 ESPController/compile_commands.json
 ATTINYCellModule/compile_commands.json
 STM32All-In-One/compile_commands.json
+_codeql_detected_source_root

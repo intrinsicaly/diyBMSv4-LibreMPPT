@@ -11,6 +11,8 @@ static constexpr const char *const TAG = "diybms-web";
 #include "webserver_helper_funcs.h"
 #include "webserver_json_requests.h"
 #include "webserver_json_post.h"
+#include "webserver_json_mppt.h"
+#include "mppt_canbus.h"
 
 #include <esp_log.h>
 #include <stdarg.h>
@@ -180,6 +182,69 @@ esp_err_t default_htm_handler(httpd_req_t *req)
 
   ESP_LOGI(TAG, "default.htm complete");
   return e;
+}
+
+// Handler for mppt.htm - replaces %XSS_KEY% template variable like default_htm_handler
+esp_err_t mppt_htm_handler(httpd_req_t *req)
+{
+  httpd_resp_set_type(req, "text/html");
+  setNoStoreCacheControl(req);
+  setCookie(req);
+  ESP_LOGI(TAG, "mppt.htm");
+
+  const char *file_pointer = (const char *)file_mppt_htm;
+  size_t max_len = size_file_mppt_htm;
+  const char *end_pointer = file_pointer + max_len;
+  const char *p = file_pointer;
+
+  while (p < end_pointer)
+  {
+    char *start_ptr = (char *)memchr(p, '%', end_pointer - p);
+    if (start_ptr != NULL)
+    {
+      httpd_resp_send_chunk(req, p, start_ptr - p);
+      p = start_ptr + 1;
+      char *end_ptr = (char *)memchr(p, '%', end_pointer - p);
+      if (end_ptr != NULL)
+      {
+        int paramNameLength = end_ptr - p;
+        if (paramNameLength > 0)
+        {
+          char buf[50 + 1];
+          memcpy(buf, p, paramNameLength);
+          buf[paramNameLength] = 0;
+          if (strncmp(buf, "XSS_KEY", 7) == 0)
+          {
+            httpd_resp_sendstr_chunk(req, CookieValue);
+          }
+          else
+          {
+            httpd_resp_sendstr_chunk(req, "");
+          }
+        }
+        else
+        {
+          httpd_resp_sendstr_chunk(req, "%");
+        }
+        p = end_ptr + 1;
+      }
+      else
+      {
+        break;
+      }
+    }
+    else
+    {
+      break;
+    }
+  }
+
+  if (p < end_pointer)
+  {
+    httpd_resp_send_chunk(req, p, end_pointer - p);
+  }
+
+  return httpd_resp_send_chunk(req, NULL, 0);
 }
 
 void SetCacheAndETag(httpd_req_t *req, const char *ETag)
@@ -526,6 +591,7 @@ return_failure:
 /* URI handler structure for GET /uri */
 static const httpd_uri_t uri_root_get = {.uri = "/", .method = HTTP_GET, .handler = get_root_handler, .user_ctx = NULL};
 static const httpd_uri_t uri_defaulthtm_get = {.uri = "/default.htm", .method = HTTP_GET, .handler = default_htm_handler, .user_ctx = NULL};
+static const httpd_uri_t uri_mppthtm_get = {.uri = "/mppt.htm", .method = HTTP_GET, .handler = mppt_htm_handler, .user_ctx = NULL};
 static const httpd_uri_t uri_api_get = {.uri = "/api/*", .method = HTTP_GET, .handler = api_handler, .user_ctx = NULL};
 static const httpd_uri_t uri_download_get = {.uri = "/download", .method = HTTP_GET, .handler = content_handler_downloadfile, .user_ctx = NULL};
 static const httpd_uri_t uri_coredump_get = {.uri = "/coredump", .method = HTTP_GET, .handler = content_handler_coredumpdownloadfile, .user_ctx = NULL};
@@ -620,7 +686,7 @@ httpd_handle_t start_webserver(void)
   /* Generate default configuration */
   httpd_config_t config = HTTPD_DEFAULT_CONFIG();
 
-  config.max_uri_handlers = 11;
+  config.max_uri_handlers = 12;
   config.max_open_sockets = 8;
   config.max_resp_headers = 16;
   config.stack_size = 6250;
@@ -636,6 +702,7 @@ httpd_handle_t start_webserver(void)
     /* Register URI handlers */
     ESP_ERROR_CHECK(httpd_register_uri_handler(server, &uri_root_get));
     ESP_ERROR_CHECK(httpd_register_uri_handler(server, &uri_defaulthtm_get));
+    ESP_ERROR_CHECK(httpd_register_uri_handler(server, &uri_mppthtm_get));
 
     // Web services/API
     ESP_ERROR_CHECK(httpd_register_uri_handler(server, &uri_api_get));

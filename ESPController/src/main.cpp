@@ -77,6 +77,7 @@ extern "C"
 #include "pylonforce_canbus.h"
 #include "pylon_rs485.h"
 #include "string_utils.h"
+#include "mppt_canbus.h"
 
 #include <SPI.h>
 #include "CurrentMonitorINA229.h"
@@ -160,6 +161,7 @@ TaskHandle_t rs485_rx_task_handle = nullptr;
 TaskHandle_t service_rs485_transmit_q_task_handle = nullptr;
 TaskHandle_t canbus_tx_task_handle = nullptr;
 TaskHandle_t canbus_rx_task_handle = nullptr;
+TaskHandle_t mppt_can_task_handle = nullptr;
 
 // This large array holds all the information about the modules
 CellModuleInfo cmi[maximum_controller_cell_modules];
@@ -2790,13 +2792,22 @@ void send_ext_canbus_message(const uint32_t identifier, const uint8_t *buffer, c
   }
 }
 
+[[noreturn]] void mppt_can_task(void *)
+{
+    for (;;)
+    {
+        mppt_manager.update();
+        vTaskDelay(pdMS_TO_TICKS(100));
+    }
+}
+
 [[noreturn]] void canbus_rx(void *)
 {
   for (;;)
   {
-    while (mysettings.protocol == ProtocolEmulation::EMULATION_DISABLED || mysettings.protocol == ProtocolEmulation::RS485_PYLONTECH)
+    while ((mysettings.protocol == ProtocolEmulation::EMULATION_DISABLED || mysettings.protocol == ProtocolEmulation::RS485_PYLONTECH) && !mysettings.mppt_can_enabled)
     {
-      // Canbus is disbled, sleep until this changes....
+      // Canbus is disabled and MPPT not active, sleep until this changes....
       vTaskDelay(pdMS_TO_TICKS(2000));
     }
 
@@ -2811,7 +2822,13 @@ void send_ext_canbus_message(const uint32_t identifier, const uint8_t *buffer, c
       if (!(message.flags & TWAI_MSG_FLAG_RTR)) // we do not answer to Remote-Transmission-Requests
       {
         //        ESP_LOG_BUFFER_HEXDUMP(TAG, message.data, message.data_length_code, ESP_LOG_DEBUG);
-        if (mysettings.protocol == ProtocolEmulation::CANBUS_PYLONFORCEH2)
+
+        // Handle extended-ID (29-bit) ThingSet messages for MPPT
+        if (message.flags & TWAI_MSG_FLAG_EXTD)
+        {
+          mppt_manager.processReceivedMessage(&message);
+        }
+        else if (mysettings.protocol == ProtocolEmulation::CANBUS_PYLONFORCEH2)
         {
           pylonforce_handle_rx(&message);
         }
@@ -3754,6 +3771,7 @@ void resumeTasksAfterFirmwareUpdateFailure()
   vTaskResume(transmit_task_handle);
   vTaskResume(lazy_task_handle);
   vTaskResume(canbus_rx_task_handle);
+  vTaskResume(mppt_can_task_handle);
 }
 void suspendTasksDuringFirmwareUpdate()
 {
@@ -3767,6 +3785,7 @@ void suspendTasksDuringFirmwareUpdate()
   vTaskSuspend(transmit_task_handle);
   vTaskSuspend(lazy_task_handle);
   vTaskSuspend(canbus_rx_task_handle);
+  vTaskSuspend(mppt_can_task_handle);
 }
 
 void setup()
@@ -3918,6 +3937,9 @@ ESP32 Chip model = %u, Rev %u, Cores=%u, Features=%u)",
   hal.CANBUSEnable(true);
   hal.ConfigureCAN(mysettings.canbusbaud);
 
+  // Initialize MPPT manager
+  mppt_manager.init(&mysettings, &rules);
+
   // Serial pins IO2/IO32
   SERIAL_DATA.begin(mysettings.baudRate, SERIAL_8N1, 2, 32); // Serial for comms to modules
 
@@ -3961,6 +3983,7 @@ ESP32 Chip model = %u, Rev %u, Cores=%u, Features=%u)",
   xTaskCreate(service_rs485_transmit_q, "485_Q", 2950, nullptr, 1, &service_rs485_transmit_q_task_handle);
   xTaskCreate(canbus_tx, "CAN_Tx", 4096, nullptr, 1, &canbus_tx_task_handle);
   xTaskCreate(canbus_rx, "CAN_Rx", 2950, nullptr, 1, &canbus_rx_task_handle);
+  xTaskCreate(mppt_can_task, "MPPT", 2500, nullptr, 1, &mppt_can_task_handle);
   xTaskCreate(transmit_task, "Tx", 1950, nullptr, configMAX_PRIORITIES - 3, &transmit_task_handle);
   xTaskCreate(replyqueue_task, "rxq", 4096, nullptr, configMAX_PRIORITIES - 2, &replyqueue_task_handle);
   xTaskCreate(lazy_tasks, "lazyt", 2500, nullptr, 0, &lazy_task_handle);

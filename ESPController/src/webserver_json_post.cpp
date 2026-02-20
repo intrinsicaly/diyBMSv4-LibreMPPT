@@ -4,6 +4,7 @@ static constexpr const char *const TAG = "diybms-webpost";
 #include "webserver.h"
 #include "webserver_json_post.h"
 #include "webserver_helper_funcs.h"
+#include "webserver_json_mppt.h"
 #include <esp_netif.h>
 
 esp_err_t post_savebankconfig_json_handler(httpd_req_t *req, bool urlEncoded)
@@ -1220,7 +1221,7 @@ esp_err_t save_data_handler(httpd_req_t *req)
         return ESP_FAIL;
     }
 
-    std::array<std::string, 30> uri_array = {
+    std::array<std::string, 32> uri_array = {
         "savebankconfig", "saventp", "saveglobalsetting",
         "savemqtt", "saveinfluxdb",
         "saveconfigtofile", "wificonfigtofile",
@@ -1231,9 +1232,10 @@ esp_err_t save_data_handler(httpd_req_t *req)
         "savecurrentmon", "savecmbasic", "savecmadvanced",
         "savecmrelay", "restoreconfig", "savechargeconfig",
         "visibletiles", "dailyahreset", "setsoc",
-        "savenetconfig", "newhaapikey"};
+        "savenetconfig", "newhaapikey",
+        "savemppt", "mpptcontrol"};
 
-    std::array<std::function<esp_err_t(httpd_req_t * req, bool urlEncoded)>, 30> func_ptr = {
+    std::array<std::function<esp_err_t(httpd_req_t * req, bool urlEncoded)>, 32> func_ptr = {
         post_savebankconfig_json_handler, post_saventp_json_handler, post_saveglobalsetting_json_handler,
         post_savemqtt_json_handler, post_saveinfluxdbsetting_json_handler,
         post_saveconfigurationtoflash_json_handler, post_savewificonfigtosdcard_json_handler,
@@ -1244,7 +1246,8 @@ esp_err_t save_data_handler(httpd_req_t *req)
         post_savecurrentmon_json_handler, post_savecmbasic_json_handler, post_savecmadvanced_json_handler,
         post_savecmrelay_json_handler, post_restoreconfig_json_handler, post_savechargeconfig_json_handler,
         post_visibletiles_json_handler, post_resetdailyahcount_json_handler, post_setsoc_json_handler,
-        post_savenetconfig_json_handler, post_homeassistant_apikey_json_handler};
+        post_savenetconfig_json_handler, post_homeassistant_apikey_json_handler,
+        post_savemppt_json_handler, post_mpptcontrol_json_handler};
 
     auto name = std::string(req->uri);
 
