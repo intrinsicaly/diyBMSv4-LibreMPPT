@@ -1,0 +1,42 @@
+name: Static Analysis
+
+on:
+  push:
+    branches: [ main, develop ]
+    paths-ignore:
+      - "**.md"
+  pull_request:
+    branches: [ main, develop ]
+    paths-ignore:
+      - "**.md"
+
+jobs:
+  cppcheck:
+    name: cppcheck
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install cppcheck
+        run: sudo apt-get install -y cppcheck
+
+      - name: Run cppcheck on MPPT and packet sources
+        run: |
+          cppcheck --enable=warning,style,performance \
+            --inconclusive \
+            --suppress=missingIncludeSystem \
+            --suppress=unusedFunction \
+            --xml \
+            ESPController/src/mppt_canbus.cpp \
+            ESPController/src/PacketReceiveProcessor.cpp \
+            2> cppcheck.xml
+          cat cppcheck.xml
+
+      - name: Upload cppcheck results
+        uses: actions/upload-artifact@v4
+        with:
+          name: cppcheck-results
+          path: cppcheck.xml
+        if: always()
