@@ -8,6 +8,9 @@ on:
     paths-ignore:
       - "**.md"
 
+permissions:
+  contents: read
+
 jobs:
   unit-tests:
     name: Build and run unit tests
