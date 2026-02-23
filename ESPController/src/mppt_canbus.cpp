@@ -680,6 +680,7 @@ void MPPTManager::dumpDiagnostics()
         MPPTDevice& dev = _devices[i];
         if (dev.node_id == 0) continue;
 
+        /* now is used by ESP_LOGI below (suppressed as no-op in test builds) */
         int64_t now = esp_timer_get_time();
         (void)now;
         ESP_LOGI(TAG, "  [%d] MPPT 0x%04X:", i, dev.node_id);
@@ -706,6 +707,7 @@ void MPPTManager::dumpDeviceDetail(uint16_t node_id)
         return;
     }
 
+    /* device and now are used by ESP_LOGI below (suppressed as no-op in test builds) */
     MPPTDevice& device = _devices[idx];
     int64_t now = esp_timer_get_time();
     (void)device;
