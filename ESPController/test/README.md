@@ -1,127 +1,159 @@
-# diyBMS Unit Tests
+# diyBMS MPPT Unit Tests
 
-## Overview
+This directory contains the unit test suite for the diyBMS MPPT CAN bus
+integration and packet processing modules, built with the
+[Unity](https://github.com/ThrowTheSwitch/Unity) C test framework.
 
-This directory contains host-side unit tests for the diyBMS ESP32 controller
-firmware.  Tests run on a standard Linux host (no embedded hardware required)
-using the [Unity](https://github.com/ThrowTheSwitch/Unity) C test framework and
-a set of lightweight mock headers that replace ESP-IDF / Arduino / FreeRTOS
-platform APIs.
+---
 
 ## Directory Structure
 
 ```
 test/
-├── CMakeLists.txt              – CMake build configuration
-├── README.md                   – This file
-├── test_main.cpp               – Unity test runner (setUp/tearDown + main)
-├── test_mppt_canbus.cpp        – MPPTManager unit tests
-├── test_packet_processor.cpp   – PacketReceiveProcessor unit tests
-├── test_canbus.cpp             – CAN bus mock / send function tests
-└── mocks/
-    ├── Arduino.h               – Arduino platform types, millis(), logging
-    ├── esp_timer.h             – esp_timer_get_time() mock
-    ├── driver/
-    │   ├── twai.h              – TWAI (CAN bus) message types
-    │   └── uart.h              – UART type definitions
-    ├── freertos/
-    │   ├── FreeRTOS.h          – FreeRTOS basic types and macros
-    │   ├── semphr.h            – Semaphore functions
-    │   └── task.h              – Task / notification functions
-    ├── EmbeddedFiles_Defines.h – Empty placeholder (generated in real build)
-    ├── EmbeddedFiles_Integrity.h – Empty placeholder
-    ├── mock_hal.h / .cpp       – Hardware abstraction layer mock
-    ├── mock_canbus.h / .cpp    – CAN bus mock and send_ext_canbus_message()
-    ├── mock_settings.h         – make_test_settings() helper
-    └── mock_rules.cpp          – Minimal Rules class stub for linking
+├── mocks/
+│   ├── Arduino.h              Mock Arduino runtime
+│   ├── EmbeddedFiles_Defines.h  Stub (not needed in tests)
+│   ├── EmbeddedFiles_Integrity.h Stub
+│   ├── esp_log.h              Mock ESP logging macros
+│   ├── esp_timer.h            Mock esp_timer_get_time()
+│   ├── driver/
+│   │   ├── twai.h             Mock TWAI / CAN driver types
+│   │   └── uart.h             Mock UART driver types
+│   ├── freertos/
+│   │   ├── FreeRTOS.h         Mock FreeRTOS types
+│   │   └── semphr.h           Mock semaphore + task functions
+│   ├── mock_hal.h / .cpp      MockHAL – controllable timer & semaphore stubs
+│   └── mock_canbus.h / .cpp   MockCANBus – recordable CAN transmit stub
+├── unity/                     Unity framework (cloned at build time)
+├── test_mppt_canbus.cpp       Tests for MPPTManager
+├── test_packet_processor.cpp  Tests for PacketReceiveProcessor
+├── test_main.cpp              Test runner (entry point)
+├── CMakeLists.txt             Native build configuration
+└── README.md                  This file
 ```
 
-## Setup
+---
 
-### Prerequisites
+## Prerequisites
+
+| Tool         | Version tested |
+|--------------|---------------|
+| gcc / g++    | 11 or later    |
+| cmake        | 3.10 or later  |
+| lcov         | any recent     |
+| git          | any recent     |
+
+On Debian/Ubuntu:
 
 ```bash
-# Ubuntu / Debian
-sudo apt-get install -y cmake build-essential lcov
+sudo apt-get install build-essential cmake lcov git
 ```
 
-### Clone Unity Framework
+---
 
-Unity is not bundled in the repository.  Clone it before building:
+## Build and Run
 
 ```bash
 cd ESPController/test
-git clone https://github.com/ThrowTheSwitch/Unity.git unity
+
+# 1 – Clone the Unity framework (once)
+git clone --depth 1 https://github.com/ThrowTheSwitch/Unity.git unity
+
+# 2 – Configure
+mkdir -p build && cd build
+cmake ..
+
+# 3 – Build
+make
+
+# 4 – Run
+./run_tests
 ```
 
-### Build
+Expected output:
 
-```bash
-cd ESPController/test
-cmake -B build
-cmake --build build --parallel
+```
+=== MPPT CAN Bus Manager Tests ===
+test_mppt_device_registration:PASS
+test_mppt_duplicate_registration:PASS
+...
+
+=== Packet Processing Tests ===
+test_packet_validation:PASS
+...
+
+-----------------------
+20 Tests 0 Failures 0 Ignored
+OK
 ```
 
-### Run Tests
+---
+
+## Coverage Report
 
 ```bash
-./build/run_tests
-```
-
-### Generate Coverage Report
-
-Build with coverage enabled then generate an HTML report:
-
-```bash
-cmake -B build -DENABLE_COVERAGE=ON
-cmake --build build --parallel
-./build/run_tests
-cd build
+# From the build directory:
 lcov --capture --directory . --output-file coverage.info
-lcov --remove coverage.info '/usr/*' '*/test/*' --output-file coverage.info
 genhtml coverage.info --output-directory coverage_html
+# Open coverage_html/index.html in a browser
 ```
 
-Open `build/coverage_html/index.html` in your browser.
+---
 
-## Writing New Tests
+## Test Suites
 
-1. Add your test function to one of the existing `test_*.cpp` files (or create
-   a new one and add it to `CMakeLists.txt`).
-2. Declare the function in `test_main.cpp` and add a `RUN_TEST()` call inside
-   `main()`.
-3. Use Unity assertion macros:
+### MPPT CAN Bus Tests (`test_mppt_canbus.cpp`)
 
-   | Macro | Description |
-   |---|---|
-   | `TEST_ASSERT_TRUE(cond)` | Fails if `cond` is false |
-   | `TEST_ASSERT_FALSE(cond)` | Fails if `cond` is true |
-   | `TEST_ASSERT_EQUAL(exp, act)` | Integer equality |
-   | `TEST_ASSERT_EQUAL_UINT8(exp, act)` | uint8_t equality |
-   | `TEST_ASSERT_EQUAL_UINT16(exp, act)` | uint16_t equality |
-   | `TEST_ASSERT_EQUAL_UINT32(exp, act)` | uint32_t equality |
-   | `TEST_ASSERT_EQUAL_HEX8(exp, act)` | uint8_t, printed in hex |
-   | `TEST_ASSERT_EQUAL_INT16(exp, act)` | int16_t equality |
-   | `TEST_ASSERT_NOT_NULL(ptr)` | Fails if pointer is NULL |
-   | `TEST_ASSERT_GREATER_THAN(thresh, val)` | val > thresh |
+| Test | What it verifies |
+|------|-----------------|
+| `test_mppt_device_registration` | Single device registered on first message |
+| `test_mppt_duplicate_registration` | Duplicate CAN source does not create two entries |
+| `test_mppt_max_devices` | Device list capped at `MAX_MPPT_DEVICES` |
+| `test_mppt_device_discovery` | Discovery broadcast uses correct CAN ID |
+| `test_mppt_telemetry_decode` | CBOR int16 temperature decoded correctly |
+| `test_mppt_invalid_telemetry` | Invalid CBOR payload ignored, device stays online |
+| `test_mppt_control_send` | `sendControl(false)` produces CBOR false frame |
+| `test_mppt_control_enable` | `sendControl(true)` produces CBOR true frame |
+| `test_mppt_timeout_handling` | Device marked `MPPT_TIMEOUT` after inactivity |
+| `test_mppt_input_validation` | NULL message pointer handled safely |
+| `test_mppt_canbus_send_failure` | CAN transmit failure handled without crash |
+| `test_mppt_out_of_range_source_id` | IDs outside `[MPPT_ID_MIN, MPPT_ID_MAX]` ignored |
+| `test_mppt_wrong_can_base` | Non-pub/sub CAN base IDs ignored |
+| `test_mppt_init_null_pointers` | NULL settings/rules pointer handled safely |
+| `test_mppt_invalid_dlc` | DLC > 8 rejected |
 
-4. Control mock state from your test:
-   - `mock_esp_timer_value` – set the value returned by `esp_timer_get_time()`
-   - `mock_millis_value` – set the value returned by `millis()`
-   - `g_mock_canbus->should_fail_transmit` – simulate CAN send failure
-   - `g_mock_canbus->transmitted_messages` – inspect sent CAN frames
-   - `g_mock_semphr_fail` – make `xSemaphoreTake()` always return `pdFALSE`
-   - `g_mock_hal->can_mutex_should_fail` – simulate HAL mutex timeout
+### Packet Processor Tests (`test_packet_processor.cpp`)
 
-## Continuous Integration
+| Test | What it verifies |
+|------|-----------------|
+| `test_packet_validation` | Valid packet with correct CRC accepted |
+| `test_packet_crc` | Packet with corrupted CRC rejected |
+| `test_packet_buffer_overflow` | `start_address >= max` rejected |
+| `test_packet_address_range` | `start_address > end_address` rejected |
+| `test_packet_null_pointer` | NULL packet pointer handled safely |
 
-Tests run automatically via GitHub Actions (`.github/workflows/test.yml`) on:
+---
 
-- Every push to `main` / `develop`
-- Every pull request targeting `main` / `develop`
+## Mock Framework
 
-The workflow installs dependencies, clones Unity, builds the test binary, runs
-it, and (optionally) uploads a coverage report to Codecov.
+### MockHAL
 
-Static analysis runs separately via `.github/workflows/static-analysis.yml`
-using `cppcheck`.
+```cpp
+MockHAL &hal = MockHAL::instance();
+hal.reset();                    // call in setUp()
+hal.setTime(1000000LL);         // set simulated µs clock
+hal.advanceTime(500000LL);      // advance by 500 ms
+hal.mutex_should_fail_take = true; // force semaphore failure
+```
+
+### MockCANBus
+
+```cpp
+MockCANBus &bus = MockCANBus::instance();
+bus.reset();                        // call in setUp()
+bus.should_fail_transmit = true;    // simulate CAN transmit error
+
+int count = bus.getSentCount();
+const SentCANMessage *m = bus.getLastSent();
+// m->identifier, m->data[], m->length
+```

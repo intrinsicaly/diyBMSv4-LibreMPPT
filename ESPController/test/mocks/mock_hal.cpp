@@ -1,50 +1,124 @@
-/*
- * Mock HAL implementation for unit testing
+/**
+ * @file mock_hal.cpp
+ * @brief Mock HAL implementation - provides controllable stubs for ESP32 HAL
  */
 
 #include "mock_hal.h"
-#include <cstdio>
-#include <cstring>
+#include "Arduino.h"
+#include "freertos/FreeRTOS.h"
+#include "freertos/semphr.h"
+#include <stdint.h>
+#include <stddef.h>
+#include <stdlib.h>
 
-MockHAL *g_mock_hal = nullptr;
+/* ---------------------------------------------------------------------------
+ * MockHAL singleton
+ * ------------------------------------------------------------------------- */
 
 MockHAL::MockHAL()
-    : can_mutex_acquired(false)
-    , can_mutex_should_fail(false)
-    , can_mutex_timeout_ms(0)
+    : mutex_should_fail_take(false), mutex_take_count(0), mutex_give_count(0),
+      _mock_time_us(0)
 {
-    g_mock_hal = this;
 }
 
-MockHAL::~MockHAL()
+MockHAL &MockHAL::instance()
 {
-    g_mock_hal = nullptr;
+    static MockHAL hal;
+    return hal;
 }
 
-bool MockHAL::GetCANMutex(uint32_t timeout_ms)
+void MockHAL::reset()
 {
-    can_mutex_timeout_ms = timeout_ms;
-    if (can_mutex_should_fail) return false;
-    can_mutex_acquired = true;
-    return true;
+    _mock_time_us        = 0;
+    mutex_should_fail_take = false;
+    mutex_take_count     = 0;
+    mutex_give_count     = 0;
 }
 
-void MockHAL::ReleaseCANMutex()
+void MockHAL::setTime(int64_t time_us)
 {
-    can_mutex_acquired = false;
+    _mock_time_us = time_us;
 }
 
-void MockHAL::LogMessage(const char *level, const char *tag, const char *message)
+void MockHAL::advanceTime(int64_t delta_us)
 {
-    char buf[256];
-    snprintf(buf, sizeof(buf), "[%s] %s: %s", level, tag, message);
-    log_messages.push_back(buf);
+    _mock_time_us += delta_us;
 }
 
-void MockHAL::Reset()
+int64_t MockHAL::getTime() const
 {
-    can_mutex_acquired    = false;
-    can_mutex_should_fail = false;
-    can_mutex_timeout_ms  = 0;
-    log_messages.clear();
+    return _mock_time_us;
+}
+
+unsigned long MockHAL::getMillis() const
+{
+    return (unsigned long)(_mock_time_us / 1000LL);
+}
+
+/* ---------------------------------------------------------------------------
+ * C-linkage stubs that the production code calls
+ * ------------------------------------------------------------------------- */
+
+extern "C" {
+
+int64_t esp_timer_get_time(void)
+{
+    return MockHAL::instance().getTime();
+}
+
+} /* extern "C" */
+
+/* millis() is used by PacketReceiveProcessor */
+unsigned long millis()
+{
+    return MockHAL::instance().getMillis();
+}
+
+/* Arduino Serial stubs */
+MockSerial Serial;
+MockSerial Serial1;
+MockSerial Serial2;
+
+/* ---------------------------------------------------------------------------
+ * FreeRTOS semaphore stubs
+ * Each call goes through a simple mutex backed by a flag.
+ * ------------------------------------------------------------------------- */
+
+static bool _mutex_held = false;
+
+SemaphoreHandle_t xSemaphoreCreateMutex(void)
+{
+    /* Return a non-NULL sentinel so the caller can detect failure */
+    static int sentinel = 1;
+    return (SemaphoreHandle_t)&sentinel;
+}
+
+BaseType_t xSemaphoreTake(SemaphoreHandle_t xSemaphore, TickType_t xTicksToWait)
+{
+    (void)xTicksToWait;
+    if (xSemaphore == NULL) return pdFALSE;
+
+    MockHAL &hal = MockHAL::instance();
+    if (hal.mutex_should_fail_take) return pdFALSE;
+
+    hal.mutex_take_count++;
+    _mutex_held = true;
+    return pdTRUE;
+}
+
+BaseType_t xSemaphoreGive(SemaphoreHandle_t xSemaphore)
+{
+    if (xSemaphore == NULL) return pdFALSE;
+    MockHAL::instance().mutex_give_count++;
+    _mutex_held = false;
+    return pdTRUE;
+}
+
+BaseType_t xTaskNotify(TaskHandle_t xTaskToNotify, uint32_t ulValue, eNotifyAction eAction)
+{
+    /* No-op in tests */
+    (void)xTaskToNotify;
+    (void)ulValue;
+    (void)eAction;
+    return pdTRUE;
 }

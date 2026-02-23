@@ -1,39 +1,16 @@
 #pragma once
-/*
- * Mock freertos/semphr.h for unit testing on Linux host
- * Provides a simple single-threaded semaphore mock
- */
-
+/* Mock freertos/semphr.h for native unit test builds */
 #include "FreeRTOS.h"
 
-/* Internal semaphore structure */
-struct MockSemaphore {
-    bool locked;
-    MockSemaphore() : locked(false) {}
-};
+#ifdef __cplusplus
+extern "C" {
+#endif
 
-typedef MockSemaphore* SemaphoreHandle_t;
+SemaphoreHandle_t xSemaphoreCreateMutex(void);
+BaseType_t xSemaphoreTake(SemaphoreHandle_t xSemaphore, TickType_t xTicksToWait);
+BaseType_t xSemaphoreGive(SemaphoreHandle_t xSemaphore);
+BaseType_t xTaskNotify(TaskHandle_t xTaskToNotify, uint32_t ulValue, eNotifyAction eAction);
 
-/* Global flag to force semaphore take failure (for testing timeout paths) */
-extern bool g_mock_semphr_fail;
-
-inline SemaphoreHandle_t xSemaphoreCreateMutex() {
-    return new MockSemaphore();
+#ifdef __cplusplus
 }
-
-inline BaseType_t xSemaphoreTake(SemaphoreHandle_t sem, TickType_t ticks) {
-    (void)ticks;
-    if (g_mock_semphr_fail) return pdFALSE;
-    if (sem && sem->locked) return pdFALSE;
-    if (sem) sem->locked = true;
-    return pdTRUE;
-}
-
-inline BaseType_t xSemaphoreGive(SemaphoreHandle_t sem) {
-    if (sem) sem->locked = false;
-    return pdTRUE;
-}
-
-inline void vSemaphoreDelete(SemaphoreHandle_t sem) {
-    delete sem;
-}
+#endif

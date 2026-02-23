@@ -2,62 +2,73 @@ name: Unit Tests
 
 on:
   push:
-    branches: [ main, develop ]
     paths-ignore:
       - "**.md"
   pull_request:
-    branches: [ main, develop ]
     paths-ignore:
       - "**.md"
 
+permissions:
+  contents: read
+
 jobs:
-  test:
-    name: Run Unit Tests
+  unit-tests:
+    name: Build and run unit tests
     runs-on: ubuntu-latest
-    permissions:
-      contents: read
 
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
       - name: Install dependencies
         run: |
-          sudo apt-get update
-          sudo apt-get install -y cmake build-essential lcov
+          sudo apt-get update -y
+          sudo apt-get install -y build-essential cmake lcov
 
       - name: Clone Unity test framework
         run: |
-          cd ESPController/test
-          git clone https://github.com/ThrowTheSwitch/Unity.git unity
+          git clone --depth 1 https://github.com/ThrowTheSwitch/Unity.git \
+            ESPController/test/unity
 
-      - name: Configure CMake
+      - name: Configure
         run: |
-          cd ESPController/test
-          cmake -B build -DENABLE_COVERAGE=ON
+          mkdir -p ESPController/test/build
+          cmake -S ESPController/test -B ESPController/test/build
 
-      - name: Build tests
+      - name: Build
         run: cmake --build ESPController/test/build --parallel
 
       - name: Run tests
-        run: |
-          cd ESPController/test/build
-          ./run_tests
+        run: ESPController/test/build/run_tests
 
       - name: Generate coverage report
-        if: success()
         run: |
           cd ESPController/test/build
-          lcov --capture --directory . --output-file coverage.info
-          lcov --remove coverage.info '/usr/*' --output-file coverage.info
-          lcov --remove coverage.info '*/test/*' --output-file coverage.info
-          lcov --list coverage.info
+          lcov \
+            --capture \
+            --directory . \
+            --output-file coverage.info \
+            --ignore-errors mismatch
+          lcov \
+            --remove coverage.info \
+            '*/unity/*' \
+            '*/test_*' \
+            '/usr/*' \
+            '*/mocks/*' \
+            --output-file coverage_filtered.info \
+            --ignore-errors unused
+          genhtml coverage_filtered.info \
+            --output-directory coverage_html
+
+      - name: Upload coverage report
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-report
+          path: ESPController/test/build/coverage_html
+          if-no-files-found: warn
 
       - name: Upload coverage to Codecov
-        if: success()
         uses: codecov/codecov-action@v4
         with:
-          files: ESPController/test/build/coverage.info
-          flags: unittests
-          name: codecov-diyBMS
+          files: ESPController/test/build/coverage_filtered.info
+          fail_ci_if_error: false
         continue-on-error: true

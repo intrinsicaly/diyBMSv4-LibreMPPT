@@ -1,53 +1,68 @@
-/*
- * Unit tests for PacketReceiveProcessor (PacketReceiveProcessor.cpp)
+/**
+ * @file test_packet_processor.cpp
+ * @brief Unit tests for the PacketReceiveProcessor class
  *
- * setUp / tearDown live in test_main.cpp.
+ * Tests cover:
+ *  - Valid packet processing
+ *  - CRC validation
+ *  - Buffer overflow protection (address range)
+ *  - Address range validation
+ *  - NULL pointer handling
  */
 
 #include "unity.h"
+#include "mocks/mock_hal.h"
 #include "PacketReceiveProcessor.h"
 #include "crc16.h"
-#include <cstring>
 
-/* Extern symbols defined in test_main.cpp */
-extern uint32_t mock_millis_value;
+/* ---------------------------------------------------------------------------
+ * Globals required by PacketReceiveProcessor and defines.h
+ * ------------------------------------------------------------------------- */
 
-/* ------------------------------------------------------------------ */
-/* Helpers                                                             */
-/* ------------------------------------------------------------------ */
+/** Global CellModuleInfo array referenced throughout the codebase */
+CellModuleInfo cmi[maximum_controller_cell_modules];
 
-/** Build a PacketStruct with a valid CRC and the ReplyWasProcessedByAModule
- *  bit set in command (0x80 OR command nibble). */
-static PacketStruct make_packet(uint8_t start, uint8_t end, uint8_t cmd_nibble,
-                                uint16_t sequence = 1, uint8_t hops = 1)
+/** Voltage snapshot task handle – NULL is fine for unit tests */
+TaskHandle_t voltageandstatussnapshot_task_handle = nullptr;
+
+/* ---------------------------------------------------------------------------
+ * Helper utilities
+ * ------------------------------------------------------------------------- */
+
+/**
+ * Build a PacketStruct with a valid CRC and 'processed by module' bit set.
+ *
+ * @param start   start_address field
+ * @param end     end_address field
+ * @param hops    hops field (total modules)
+ * @param cmd     lower nibble command; top bit set => processed by module
+ */
+static PacketStruct make_packet(uint8_t start, uint8_t end,
+                                uint8_t hops, uint8_t cmd)
 {
     PacketStruct pkt;
     memset(&pkt, 0, sizeof(pkt));
     pkt.start_address = start;
     pkt.end_address   = end;
-    /* Set bit 7 so ReplyWasProcessedByAModule() returns true */
-    pkt.command       = (uint8_t)(0x80 | (cmd_nibble & 0x0F));
     pkt.hops          = hops;
-    pkt.sequence      = sequence;
-    pkt.crc           = CRC16::CalculateArray(
-                            reinterpret_cast<uint8_t *>(&pkt),
-                            sizeof(pkt) - sizeof(pkt.crc));
+    pkt.command       = cmd;
+    pkt.sequence      = 1;
+    /* Calculate and embed a valid CRC */
+    pkt.crc = CRC16::CalculateArray((uint8_t *)&pkt, sizeof(pkt) - 2);
     return pkt;
 }
 
-/* ------------------------------------------------------------------ */
-/* Tests                                                               */
-/* ------------------------------------------------------------------ */
+/* ---------------------------------------------------------------------------
+ * Test 1: valid packet is accepted and returns true
+ * ------------------------------------------------------------------------- */
 
-/**
- * Test: Valid Packet Processing
- * A correctly formed packet (good CRC, valid address range) is accepted.
- */
 void test_packet_validation(void)
 {
     PacketReceiveProcessor proc;
 
-    PacketStruct pkt = make_packet(0, 0, COMMAND::ReadVoltageAndStatus);
+    /* command = ReadVoltageAndStatus (1) | processed-by-module bit (0x80) */
+    PacketStruct pkt = make_packet(0, 0, 1, (uint8_t)(0x80 | COMMAND::ReadVoltageAndStatus));
+
     bool result = proc.ProcessReply(&pkt);
 
     TEST_ASSERT_TRUE(result);
@@ -55,16 +70,16 @@ void test_packet_validation(void)
     TEST_ASSERT_EQUAL_UINT16(0, proc.totalCRCErrors);
 }
 
-/**
- * Test: Invalid CRC
- * A packet with a corrupt CRC must be rejected.
- */
+/* ---------------------------------------------------------------------------
+ * Test 2: corrupted CRC is rejected
+ * ------------------------------------------------------------------------- */
+
 void test_packet_crc(void)
 {
     PacketReceiveProcessor proc;
 
-    PacketStruct pkt = make_packet(0, 0, COMMAND::ReadVoltageAndStatus);
-    pkt.crc ^= 0xFFFF;  /* corrupt the CRC */
+    PacketStruct pkt = make_packet(0, 0, 1, (uint8_t)(0x80 | COMMAND::ReadVoltageAndStatus));
+    pkt.crc ^= 0xFFFF; /* corrupt the CRC */
 
     bool result = proc.ProcessReply(&pkt);
 
@@ -72,23 +87,22 @@ void test_packet_crc(void)
     TEST_ASSERT_EQUAL_UINT16(1, proc.totalCRCErrors);
 }
 
-/**
- * Test: Buffer Overflow Protection
- * Packets whose address fields exceed maximum_controller_cell_modules are
- * rejected before any array access.
- */
+/* ---------------------------------------------------------------------------
+ * Test 3: start_address >= maximum_controller_cell_modules is rejected
+ * ------------------------------------------------------------------------- */
+
 void test_packet_buffer_overflow(void)
 {
     PacketReceiveProcessor proc;
 
     PacketStruct pkt;
     memset(&pkt, 0, sizeof(pkt));
-    pkt.start_address = maximum_controller_cell_modules;     /* == 200, out of range */
-    pkt.end_address   = maximum_controller_cell_modules + 5;
+    pkt.start_address = maximum_controller_cell_modules; /* out of range */
+    pkt.end_address   = maximum_controller_cell_modules;
+    pkt.hops          = 1;
     pkt.command       = (uint8_t)(0x80 | COMMAND::ReadVoltageAndStatus);
-    pkt.crc           = CRC16::CalculateArray(
-                            reinterpret_cast<uint8_t *>(&pkt),
-                            sizeof(pkt) - sizeof(pkt.crc));
+    pkt.sequence      = 1;
+    pkt.crc = CRC16::CalculateArray((uint8_t *)&pkt, sizeof(pkt) - 2);
 
     bool result = proc.ProcessReply(&pkt);
 
@@ -96,10 +110,10 @@ void test_packet_buffer_overflow(void)
     TEST_ASSERT_EQUAL_UINT16(1, proc.totalOutofSequenceErrors);
 }
 
-/**
- * Test: Invalid Address Range
- * start_address > end_address must be rejected.
- */
+/* ---------------------------------------------------------------------------
+ * Test 4: start_address > end_address is rejected
+ * ------------------------------------------------------------------------- */
+
 void test_packet_address_range(void)
 {
     PacketReceiveProcessor proc;
@@ -107,14 +121,29 @@ void test_packet_address_range(void)
     PacketStruct pkt;
     memset(&pkt, 0, sizeof(pkt));
     pkt.start_address = 5;
-    pkt.end_address   = 2;  /* invalid: start > end */
+    pkt.end_address   = 2; /* start > end */
+    pkt.hops          = 6;
     pkt.command       = (uint8_t)(0x80 | COMMAND::ReadVoltageAndStatus);
-    pkt.crc           = CRC16::CalculateArray(
-                            reinterpret_cast<uint8_t *>(&pkt),
-                            sizeof(pkt) - sizeof(pkt.crc));
+    pkt.sequence      = 1;
+    pkt.crc = CRC16::CalculateArray((uint8_t *)&pkt, sizeof(pkt) - 2);
 
     bool result = proc.ProcessReply(&pkt);
 
     TEST_ASSERT_FALSE(result);
     TEST_ASSERT_EQUAL_UINT16(1, proc.totalOutofSequenceErrors);
+}
+
+/* ---------------------------------------------------------------------------
+ * Test 5: NULL pointer is handled safely
+ * ------------------------------------------------------------------------- */
+
+void test_packet_null_pointer(void)
+{
+    PacketReceiveProcessor proc;
+
+    bool result = proc.ProcessReply(nullptr);
+
+    TEST_ASSERT_FALSE(result);
+    /* packetsReceived increments even for NULL (matches implementation) */
+    TEST_ASSERT_EQUAL_UINT32(1, proc.packetsReceived);
 }

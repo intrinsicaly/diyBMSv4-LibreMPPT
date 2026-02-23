@@ -1,13 +1,14 @@
 #pragma once
-/*
- * Mock esp_timer.h for unit testing on Linux host
- */
-
+/* Mock esp_timer.h for native unit test builds */
 #include <stdint.h>
 
-/* Controllable mock timer value (in microseconds) */
-extern int64_t mock_esp_timer_value;
+#ifdef __cplusplus
+extern "C" {
+#endif
 
-inline int64_t esp_timer_get_time(void) {
-    return mock_esp_timer_value;
+/* Returns microseconds since boot - provided by mock_hal.cpp */
+int64_t esp_timer_get_time(void);
+
+#ifdef __cplusplus
 }
+#endif
