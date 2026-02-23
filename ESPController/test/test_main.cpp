@@ -49,6 +49,18 @@ void test_mppt_wrong_can_base(void);
 void test_mppt_init_null_pointers(void);
 void test_mppt_invalid_dlc(void);
 
+/* State machine and error tracking tests */
+void test_mppt_state_machine_initial(void);
+void test_mppt_state_machine_timeout_warning(void);
+void test_mppt_state_machine_offline(void);
+void test_mppt_error_stats_send_failure(void);
+void test_mppt_error_stats_receive_error(void);
+void test_mppt_reset_error_stats(void);
+void test_mppt_state_name(void);
+void test_mppt_device_state_to_string(void);
+void test_mppt_validation_error_out_of_range(void);
+void test_mppt_state_machine_recovery(void);
+
 /* setUp/tearDown for MPPT tests are defined in test_mppt_canbus.cpp */
 void setUp(void);
 void tearDown(void);
@@ -89,6 +101,18 @@ int main(void)
     RUN_TEST(test_mppt_wrong_can_base);
     RUN_TEST(test_mppt_init_null_pointers);
     RUN_TEST(test_mppt_invalid_dlc);
+
+    /* State machine and error tracking tests */
+    RUN_TEST(test_mppt_state_machine_initial);
+    RUN_TEST(test_mppt_state_machine_timeout_warning);
+    RUN_TEST(test_mppt_state_machine_offline);
+    RUN_TEST(test_mppt_error_stats_send_failure);
+    RUN_TEST(test_mppt_error_stats_receive_error);
+    RUN_TEST(test_mppt_reset_error_stats);
+    RUN_TEST(test_mppt_state_name);
+    RUN_TEST(test_mppt_device_state_to_string);
+    RUN_TEST(test_mppt_validation_error_out_of_range);
+    RUN_TEST(test_mppt_state_machine_recovery);
 
     /* ---- Packet Processing Tests ---- */
     printf("\n=== Packet Processing Tests ===\n");

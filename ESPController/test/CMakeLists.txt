@@ -29,6 +29,7 @@ include_directories(
     ${MOCKS_DIR}/driver    # mock driver/twai.h, driver/uart.h
     ${MOCKS_DIR}/freertos  # mock freertos/FreeRTOS.h, freertos/semphr.h
     ${INC_DIR}             # production headers (defines.h, mppt_canbus.h, ...)
+    ${SRC_DIR}             # production source headers (mppt_config.h, ...)
     ${LIB_DIR}/crc16       # CRC16 library header
     ${UNITY_DIR}/src       # Unity framework
 )

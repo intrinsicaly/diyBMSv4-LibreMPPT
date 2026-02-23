@@ -380,3 +380,211 @@ void test_mppt_invalid_dlc(void)
     TEST_ASSERT_EQUAL_UINT8(0, g_mgr->getDeviceCount());
 }
 
+
+/* ---------------------------------------------------------------------------
+ * Test 16: state machine – newly registered device starts in DISCOVERING,
+ *          transitions to ONLINE after first message
+ * ------------------------------------------------------------------------- */
+
+void test_mppt_state_machine_initial(void)
+{
+    uint8_t payload[5];
+    encode_cbor_small_uint(payload, THINGSET_ID_STATE, 3);
+    twai_message_t msg = make_pubsub_msg(THINGSET_MPPT_ID_MIN, payload, 5);
+    g_mgr->processReceivedMessage(&msg);
+
+    const MPPTDevice *dev = g_mgr->getDevice(0);
+    TEST_ASSERT_NOT_NULL(dev);
+    /* After first message the state machine transitions from DISCOVERING to ONLINE */
+    TEST_ASSERT_EQUAL_INT((int)DeviceState::ONLINE, (int)dev->state);
+    TEST_ASSERT_EQUAL_UINT32(1, dev->total_messages_received);
+}
+
+/* ---------------------------------------------------------------------------
+ * Test 17: state machine – device transitions to TIMEOUT_WARNING
+ * ------------------------------------------------------------------------- */
+
+void test_mppt_state_machine_timeout_warning(void)
+{
+    MockHAL::instance().setTime(0);
+
+    uint8_t payload[5];
+    encode_cbor_small_uint(payload, THINGSET_ID_STATE, 3);
+    twai_message_t msg = make_pubsub_msg(THINGSET_MPPT_ID_MIN, payload, 5);
+    g_mgr->processReceivedMessage(&msg);
+
+    const MPPTDevice *dev = g_mgr->getDevice(0);
+    TEST_ASSERT_NOT_NULL(dev);
+    TEST_ASSERT_EQUAL_INT((int)DeviceState::ONLINE, (int)dev->state);
+
+    /* Advance past the warning threshold (5 seconds) but before offline (10 seconds) */
+    MockHAL::instance().setTime(6LL * 1000000LL);
+    g_mgr->update();
+
+    TEST_ASSERT_EQUAL_INT((int)DeviceState::TIMEOUT_WARNING, (int)dev->state);
+}
+
+/* ---------------------------------------------------------------------------
+ * Test 18: state machine – device transitions to OFFLINE after full timeout
+ * ------------------------------------------------------------------------- */
+
+void test_mppt_state_machine_offline(void)
+{
+    MockHAL::instance().setTime(0);
+
+    uint8_t payload[5];
+    encode_cbor_small_uint(payload, THINGSET_ID_STATE, 3);
+    twai_message_t msg = make_pubsub_msg(THINGSET_MPPT_ID_MIN, payload, 5);
+    g_mgr->processReceivedMessage(&msg);
+
+    const MPPTDevice *dev = g_mgr->getDevice(0);
+    TEST_ASSERT_NOT_NULL(dev);
+    TEST_ASSERT_EQUAL_INT((int)DeviceState::ONLINE, (int)dev->state);
+
+    /* Advance past offline threshold (10 seconds) */
+    MockHAL::instance().setTime(11LL * 1000000LL);
+    g_mgr->update();
+
+    TEST_ASSERT_EQUAL_INT((int)DeviceState::OFFLINE, (int)dev->state);
+}
+
+/* ---------------------------------------------------------------------------
+ * Test 19: error stats – send failures are tracked
+ * ------------------------------------------------------------------------- */
+
+void test_mppt_error_stats_send_failure(void)
+{
+    MockCANBus::instance().should_fail_transmit = true;
+
+    /* Advance time past discovery interval to trigger sendDiscovery */
+    MockHAL::instance().setTime(31LL * 1000000LL);
+    g_mgr->update();
+
+    const MPPTManager::ErrorStats *stats = g_mgr->getErrorStats();
+    TEST_ASSERT_NOT_NULL(stats);
+    TEST_ASSERT_TRUE(stats->total_send_failures >= 1);
+}
+
+/* ---------------------------------------------------------------------------
+ * Test 20: error stats – receive errors tracked on invalid message
+ * ------------------------------------------------------------------------- */
+
+void test_mppt_error_stats_receive_error(void)
+{
+    g_mgr->resetErrorStats();
+
+    /* Send a NULL message to trigger receive error count */
+    g_mgr->processReceivedMessage(nullptr);
+
+    const MPPTManager::ErrorStats *stats = g_mgr->getErrorStats();
+    TEST_ASSERT_NOT_NULL(stats);
+    TEST_ASSERT_EQUAL_UINT32(1, stats->total_receive_errors);
+}
+
+/* ---------------------------------------------------------------------------
+ * Test 21: resetErrorStats clears all error counters
+ * ------------------------------------------------------------------------- */
+
+void test_mppt_reset_error_stats(void)
+{
+    MockCANBus::instance().should_fail_transmit = true;
+    MockHAL::instance().setTime(31LL * 1000000LL);
+    g_mgr->update();
+
+    g_mgr->resetErrorStats();
+
+    const MPPTManager::ErrorStats *stats = g_mgr->getErrorStats();
+    TEST_ASSERT_NOT_NULL(stats);
+    TEST_ASSERT_EQUAL_UINT32(0, stats->total_send_failures);
+    TEST_ASSERT_EQUAL_UINT32(0, stats->total_receive_errors);
+    TEST_ASSERT_EQUAL_UINT32(0, stats->total_timeouts);
+}
+
+/* ---------------------------------------------------------------------------
+ * Test 22: getDeviceStateName returns correct state string
+ * ------------------------------------------------------------------------- */
+
+void test_mppt_state_name(void)
+{
+    uint8_t payload[5];
+    encode_cbor_small_uint(payload, THINGSET_ID_STATE, 3);
+    twai_message_t msg = make_pubsub_msg(THINGSET_MPPT_ID_MIN, payload, 5);
+    g_mgr->processReceivedMessage(&msg);
+
+    const char *name = g_mgr->getDeviceStateName(THINGSET_MPPT_ID_MIN);
+    TEST_ASSERT_NOT_NULL(name);
+    TEST_ASSERT_EQUAL_STRING("ONLINE", name);
+}
+
+/* ---------------------------------------------------------------------------
+ * Test 23: deviceStateToString covers all states
+ * ------------------------------------------------------------------------- */
+
+void test_mppt_device_state_to_string(void)
+{
+    TEST_ASSERT_EQUAL_STRING("UNKNOWN",         deviceStateToString(DeviceState::UNKNOWN));
+    TEST_ASSERT_EQUAL_STRING("DISCOVERING",     deviceStateToString(DeviceState::DISCOVERING));
+    TEST_ASSERT_EQUAL_STRING("ONLINE",          deviceStateToString(DeviceState::ONLINE));
+    TEST_ASSERT_EQUAL_STRING("DEGRADED",        deviceStateToString(DeviceState::DEGRADED));
+    TEST_ASSERT_EQUAL_STRING("TIMEOUT_WARNING", deviceStateToString(DeviceState::TIMEOUT_WARNING));
+    TEST_ASSERT_EQUAL_STRING("OFFLINE",         deviceStateToString(DeviceState::OFFLINE));
+    TEST_ASSERT_EQUAL_STRING("ERROR",           deviceStateToString(DeviceState::ERROR));
+}
+
+/* ---------------------------------------------------------------------------
+ * Test 24: logError stores error context and message in ErrorStats
+ *
+ * Note: CBOR float32 telemetry requires 9 bytes which exceeds the standard
+ * CAN 8-byte frame limit. Validation errors for float values are exercised
+ * here via the public logError API instead.
+ * ------------------------------------------------------------------------- */
+
+void test_mppt_validation_error_out_of_range(void)
+{
+    g_mgr->resetErrorStats();
+
+    /* Directly invoke logError to simulate an out-of-range condition */
+    g_mgr->logError("decodeTelemetry", "Solar voltage out of range: 300.00 V");
+
+    const MPPTManager::ErrorStats *stats = g_mgr->getErrorStats();
+    TEST_ASSERT_NOT_NULL(stats);
+
+    /* last_error_message must be non-empty */
+    TEST_ASSERT_TRUE(stats->last_error_message[0] != '\0');
+
+    /* The message should contain the context and the detail */
+    TEST_ASSERT_NOT_NULL(strstr(stats->last_error_message, "decodeTelemetry"));
+    TEST_ASSERT_NOT_NULL(strstr(stats->last_error_message, "Solar voltage"));
+}
+
+/* ---------------------------------------------------------------------------
+ * Test 25: recovers to ONLINE state after new message in TIMEOUT_WARNING
+ * ------------------------------------------------------------------------- */
+
+void test_mppt_state_machine_recovery(void)
+{
+    MockHAL::instance().setTime(0);
+
+    uint8_t payload[5];
+    encode_cbor_small_uint(payload, THINGSET_ID_STATE, 3);
+    twai_message_t msg = make_pubsub_msg(THINGSET_MPPT_ID_MIN, payload, 5);
+    g_mgr->processReceivedMessage(&msg);
+
+    const MPPTDevice *dev = g_mgr->getDevice(0);
+    TEST_ASSERT_NOT_NULL(dev);
+
+    /* Advance to WARNING state */
+    MockHAL::instance().setTime(6LL * 1000000LL);
+    g_mgr->update();
+    TEST_ASSERT_EQUAL_INT((int)DeviceState::TIMEOUT_WARNING, (int)dev->state);
+
+    /* Receive new message to update last_seen_us to t=6s */
+    g_mgr->processReceivedMessage(&msg);
+
+    /* Move time forward slightly (1s after last_seen) – within warning window */
+    MockHAL::instance().setTime(7LL * 1000000LL);
+    g_mgr->update();
+
+    /* Should be ONLINE now (time_since_seen = 1s < 5s WARNING_TIMEOUT) */
+    TEST_ASSERT_EQUAL_INT((int)DeviceState::ONLINE, (int)dev->state);
+}
