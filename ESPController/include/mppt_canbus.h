@@ -6,6 +6,7 @@
 #include <driver/twai.h>
 #include <freertos/FreeRTOS.h>
 #include <freertos/semphr.h>
+#include <stdint.h>
 
 // ThingSet CAN ID constants (29-bit extended IDs)
 #define THINGSET_BMS_NODE_ID    0x0001
@@ -40,11 +41,24 @@ enum MPPTStatus : uint8_t
     MPPT_TIMEOUT = 2
 };
 
+// Device lifecycle states
+enum class DeviceState : uint8_t {
+    UNKNOWN          = 0,  // Initial state, never seen
+    DISCOVERING      = 1,  // Discovery sent, awaiting response
+    ONLINE           = 2,  // Actively receiving telemetry
+    DEGRADED         = 3,  // Receiving telemetry but with errors
+    TIMEOUT_WARNING  = 4,  // No telemetry for warning period
+    OFFLINE          = 5,  // Timed out completely
+    ERROR            = 6   // Persistent error state
+};
+
+const char* deviceStateToString(DeviceState state);
+
 struct MPPTDevice
 {
     uint16_t node_id;
-    MPPTStatus status;
-    int64_t last_seen_us;  // esp_timer_get_time() timestamp
+    MPPTStatus status;       // Legacy status field (maintained for backward compatibility)
+    int64_t last_seen_us;    // esp_timer_get_time() timestamp
 
     // Telemetry
     float solar_voltage;
@@ -58,11 +72,52 @@ struct MPPTDevice
 
     // Control state
     bool charging_enabled;
+
+    // State machine
+    DeviceState state;
+    DeviceState previous_state;
+    int64_t state_entered_time;
+    uint32_t state_transition_count;
+
+    // Health metrics
+    uint32_t total_messages_received;
+    uint32_t total_decode_errors;
+    uint32_t consecutive_errors;
+    float uptime_percentage;
 };
 
 class MPPTManager
 {
 public:
+    // Error statistics
+    struct ErrorStats {
+        uint32_t total_send_failures;
+        uint32_t total_receive_errors;
+        uint32_t total_decode_errors;
+        uint32_t total_timeouts;
+        uint32_t total_validation_errors;
+        uint32_t last_error_timestamp;
+        char last_error_message[128];
+    };
+
+    // Runtime statistics
+    struct Statistics {
+        uint64_t total_messages_sent;
+        uint64_t total_messages_received;
+        uint64_t total_discoveries_sent;
+        uint64_t total_control_commands_sent;
+        uint32_t uptime_seconds;
+        uint32_t last_statistics_dump;
+    };
+
+    // Recovery / retry configuration
+    struct RecoveryConfig {
+        uint8_t  max_retries;
+        uint32_t initial_retry_delay_ms;
+        uint32_t max_retry_delay_ms;
+        bool     enable_exponential_backoff;
+    };
+
     MPPTManager();
     void init(const diybms_eeprom_settings *settings, Rules *rules);
     void update();  // Call periodically (every 100ms)
@@ -74,14 +129,49 @@ public:
     uint8_t getDeviceCount() const;
     const MPPTDevice *getDevice(uint8_t index) const;
 
+    // Error tracking
+    ErrorStats* getErrorStats() { return &_error_stats; }
+    void resetErrorStats();
+    void logError(const char* context, const char* message);
+
+    // Statistics
+    const Statistics* getStatistics() const { return &_statistics; }
+    void updateStatistics();
+    void dumpStatistics();
+
+    // Recovery configuration
+    void setRecoveryConfig(const RecoveryConfig& config);
+
+    // State machine
+    void transitionDeviceState(MPPTDevice* device, DeviceState new_state, const char* reason);
+    void updateDeviceStateMachine(MPPTDevice* device);
+    const char* getDeviceStateName(uint16_t node_id);
+
+    // Diagnostics
+    void dumpDiagnostics();
+    void dumpDeviceDetail(uint16_t node_id);
+    void handleDegradedOperation();
+
     SemaphoreHandle_t mutex;
 
 private:
+    // Retry state per device
+    struct RetryState {
+        uint8_t retry_count;
+        uint32_t next_retry_time;
+        bool in_backoff;
+    };
+
     MPPTDevice _devices[MAX_MPPT_DEVICES];
     uint8_t _device_count;
     const diybms_eeprom_settings *_settings;
     Rules *_rules;
     int64_t _last_discovery_us;
+
+    ErrorStats _error_stats;
+    Statistics _statistics;
+    RecoveryConfig _recovery_config;
+    RetryState _retry_state[MAX_MPPT_DEVICES];
 
     void sendDiscovery();
     void checkTimeouts();
@@ -90,6 +180,8 @@ private:
     void encodeCborFloat(uint8_t *buf, uint8_t &pos, uint16_t obj_id, float value);
     void encodeCborBool(uint8_t *buf, uint8_t &pos, uint16_t obj_id, bool value);
     void sendThingSetRequest(uint16_t target_id, const uint8_t *data, uint8_t len);
+    bool sendWithRetry(uint32_t can_id, const uint8_t* data, uint8_t len, uint8_t device_idx);
+    uint32_t calculateBackoffDelay(uint8_t retry_count);
 
 #ifdef MPPT_MOCK_MODE
     void updateMockDevices();
