@@ -161,11 +161,24 @@ bool PacketProcessor::onPacketReceived(PacketStruct *receivebuffer)
   // Temporary debug counter, see where packets get lost
   PacketReceivedCounter++;
 
+  // Validate input pointer
+  if (!receivebuffer) {
+    badpackets++;
+    return false;
+  }
+
   // Calculate the CRC and compare to received
   uint16_t validateCRC = CRC16::CalculateArray((unsigned char *)receivebuffer, sizeof(PacketStruct) - 2);
 
   if (validateCRC == receivebuffer->crc)
   {
+    // Validate address ranges before processing to prevent buffer overruns
+    if (receivebuffer->start_address >= maximum_cell_modules ||
+        receivebuffer->end_address >= maximum_cell_modules ||
+        receivebuffer->hops > maximum_cell_modules) {
+      badpackets++;
+      return false;
+    }
 
 #if defined(FAKE_16_CELLS)
     uint8_t start = receivebuffer->hops;

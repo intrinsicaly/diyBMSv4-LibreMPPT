@@ -15,7 +15,35 @@ bool PacketReceiveProcessor::ProcessReply(const PacketStruct *receivebuffer)
 {
   packetsReceived++;
 
-  // TODO: VALIDATE REPLY START/END RANGES ARE VALID TO AVOID MEMORY BUFFER OVERRUNS
+  if (!receivebuffer) {
+    ESP_LOGE(TAG, "NULL receivebuffer pointer");
+    return false;
+  }
+
+  if (receivebuffer->start_address >= maximum_controller_cell_modules ||
+      receivebuffer->end_address >= maximum_controller_cell_modules) {
+    ESP_LOGE(TAG, "Address range validation failed: start=%u, end=%u, max=%u",
+             receivebuffer->start_address,
+             receivebuffer->end_address,
+             maximum_controller_cell_modules);
+    totalOutofSequenceErrors++;
+    return false;
+  }
+
+  if (receivebuffer->start_address > receivebuffer->end_address) {
+    ESP_LOGE(TAG, "Invalid address range: start=%u > end=%u",
+             receivebuffer->start_address,
+             receivebuffer->end_address);
+    totalOutofSequenceErrors++;
+    return false;
+  }
+
+  if (receivebuffer->hops > maximum_controller_cell_modules) {
+    ESP_LOGE(TAG, "Hops count exceeds maximum: hops=%u, max=%u",
+             receivebuffer->hops, maximum_controller_cell_modules);
+    totalOutofSequenceErrors++;
+    return false;
+  }
 
   // Copy to our buffer (probably don't need to do this), just use pointer instead
   memcpy(&_packetbuffer, receivebuffer, sizeof(_packetbuffer));

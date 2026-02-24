@@ -77,6 +77,7 @@ extern "C"
 #include "pylonforce_canbus.h"
 #include "pylon_rs485.h"
 #include "string_utils.h"
+#include "mppt_canbus.h"
 
 #include <SPI.h>
 #include "CurrentMonitorINA229.h"
@@ -163,6 +164,7 @@ TaskHandle_t rs485_rx_task_handle = nullptr;
 TaskHandle_t service_rs485_transmit_q_task_handle = nullptr;
 TaskHandle_t canbus_tx_task_handle = nullptr;
 TaskHandle_t canbus_rx_task_handle = nullptr;
+TaskHandle_t mppt_can_task_handle = nullptr;
 
 // This large array holds all the information about the modules
 CellModuleInfo cmi[maximum_controller_cell_modules];
@@ -2742,7 +2744,7 @@ void send_ext_canbus_message(const uint32_t identifier, const uint8_t *buffer, c
     // ESP_LOGD(TAG, "Sent CAN message 0x%x", identifier);
     // ESP_LOG_BUFFER_HEX_LEVEL(TAG, &message, sizeof(twai_message_t), esp_log_level_t::ESP_LOG_DEBUG);
     canbus_messages_sent++;
-    return;
+    return true;
   }
 
   // Something failed....
@@ -2777,6 +2779,7 @@ void send_ext_canbus_message(const uint32_t identifier, const uint8_t *buffer, c
     // when the bus is in recovery mode transmit is not possible, so wait...
     vTaskDelay(pdMS_TO_TICKS(250));
   }
+  return false;
 }
 
 void CAN_Networking_disconnect(TimerHandle_t error_debounce_timer)
@@ -3828,7 +3831,7 @@ const std::array<log_level_t, 24> log_levels =
         {.tag = "diybms-influxdb", .level = ESP_LOG_INFO},
         {.tag = "diybms-rx", .level = ESP_LOG_INFO},
         {.tag = "diybms-tx", .level = ESP_LOG_INFO},
-        {.tag = "diybms-rules", .level = ESP_LOG_INFO},
+        {.tag = "diybms-rules", .level = ESP_LOG_DEBUG},
         {.tag = "diybms-softap", .level = ESP_LOG_INFO},
         {.tag = "diybms-tft", .level = ESP_LOG_WARN},
         {.tag = "diybms-victron", .level = ESP_LOG_INFO},
@@ -3893,6 +3896,7 @@ void resumeTasksAfterFirmwareUpdateFailure()
   vTaskResume(transmit_task_handle);
   vTaskResume(lazy_task_handle);
   vTaskResume(canbus_rx_task_handle);
+  vTaskResume(mppt_can_task_handle);
 }
 void suspendTasksDuringFirmwareUpdate()
 {
@@ -3906,6 +3910,7 @@ void suspendTasksDuringFirmwareUpdate()
   vTaskSuspend(transmit_task_handle);
   vTaskSuspend(lazy_task_handle);
   vTaskSuspend(canbus_rx_task_handle);
+  vTaskSuspend(mppt_can_task_handle);
 }
 
 void setup()
@@ -4056,6 +4061,9 @@ ESP32 Chip model = %u, Rev %u, Cores=%u, Features=%u)",
   // Switch CAN chip TJA1051T/3 ON
   hal.CANBUSEnable(true);
   hal.ConfigureCAN(mysettings.canbusbaud);
+
+  // Initialize MPPT manager
+  mppt_manager.init(&mysettings, &rules);
 
   // Serial pins IO2/IO32
   SERIAL_DATA.begin(mysettings.baudRate, SERIAL_8N1, 2, 32); // Serial for comms to modules

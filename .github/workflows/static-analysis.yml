@@ -1,0 +1,79 @@
+name: Static Analysis
+
+on:
+  push:
+    paths-ignore:
+      - "**.md"
+  pull_request:
+    paths-ignore:
+      - "**.md"
+
+permissions:
+  contents: read
+
+jobs:
+  cppcheck:
+    name: cppcheck
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install cppcheck
+        run: sudo apt-get update -y && sudo apt-get install -y cppcheck
+
+      - name: Run cppcheck on MPPT and Packet modules
+        run: |
+          cppcheck \
+            --enable=all \
+            --std=c++14 \
+            --suppress=missingInclude \
+            --suppress=missingIncludeSystem \
+            --suppress=unusedFunction \
+            --error-exitcode=1 \
+            --inline-suppr \
+            -I ESPController/include \
+            ESPController/src/mppt_canbus.cpp \
+            ESPController/src/PacketReceiveProcessor.cpp
+
+  clang-tidy:
+    name: clang-tidy
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install clang-tidy and dependencies
+        run: |
+          sudo apt-get update -y
+          sudo apt-get install -y clang-tidy cmake build-essential
+
+      - name: Clone Unity for compilation database
+        run: |
+          git clone --depth 1 https://github.com/ThrowTheSwitch/Unity.git \
+            ESPController/test/unity
+
+      - name: Generate compile_commands.json
+        run: |
+          cmake \
+            -S ESPController/test \
+            -B ESPController/test/build \
+            -DCMAKE_EXPORT_COMPILE_COMMANDS=ON
+
+      - name: Run clang-tidy on MPPT module
+        run: |
+          clang-tidy \
+            -p ESPController/test/build \
+            --checks='-*,clang-analyzer-*,bugprone-*,performance-*' \
+            --warnings-as-errors='' \
+            ESPController/src/mppt_canbus.cpp \
+          || true
+
+      - name: Run clang-tidy on Packet Processor
+        run: |
+          clang-tidy \
+            -p ESPController/test/build \
+            --checks='-*,clang-analyzer-*,bugprone-*,performance-*' \
+            --warnings-as-errors='' \
+            ESPController/src/PacketReceiveProcessor.cpp \
+          || true

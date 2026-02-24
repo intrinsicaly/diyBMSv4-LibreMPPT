@@ -399,13 +399,13 @@ void CurrentMonitorINA229::CalculateAmpHourCounts()
 
         if (esp_timer_get_time() > soc_reset_time)
         {
-            // Now we reset the SOC, by clearing the registers, at this point SOC returns to 100%
-            // This does have an annoying "feature" of clearing down Ah counts :-(
-            // TODO: FIX THIS - probably need a set of shadow variables to hold the internal SOC and AH counts
-            //                  but then when/how do we reset the Ah counts?
+            // Reset the hardware charge/energy registers so SOC returns to 100%.
+            // The lifetime Ah counters (milliamphour_in_lifetime / milliamphour_out_lifetime)
+            // are accumulated independently and are NOT reset here, so they are preserved.
             ResetChargeEnergyRegisters();
             last_charge_coulombs = 0;
             SetSOC(10000);
+            ESP_LOGI(TAG, "SOC reset to 100%% while preserving lifetime Ah counters");
         }
     }
     else
