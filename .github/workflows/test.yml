@@ -24,21 +24,18 @@ jobs:
           sudo apt-get update -y
           sudo apt-get install -y build-essential cmake lcov
 
-      - name: Clone Unity test framework
-        run: |
-          git clone --depth 1 https://github.com/ThrowTheSwitch/Unity.git \
-            ESPController/test/unity
-
       - name: Configure
         run: |
-          mkdir -p ESPController/test/build
-          cmake -S ESPController/test -B ESPController/test/build
+          cmake \
+            -S ESPController/test \
+            -B ESPController/test/build \
+            -DENABLE_COVERAGE=ON
 
       - name: Build
         run: cmake --build ESPController/test/build --parallel
 
       - name: Run tests
-        run: ESPController/test/build/run_tests
+        run: ctest --test-dir ESPController/test/build --output-on-failure
 
       - name: Generate coverage report
         run: |
@@ -50,7 +47,7 @@ jobs:
             --ignore-errors mismatch
           lcov \
             --remove coverage.info \
-            '*/unity/*' \
+            '*/_deps/*' \
             '*/test_*' \
             '/usr/*' \
             '*/mocks/*' \
@@ -72,3 +69,4 @@ jobs:
           files: ESPController/test/build/coverage_filtered.info
           fail_ci_if_error: false
         continue-on-error: true
+

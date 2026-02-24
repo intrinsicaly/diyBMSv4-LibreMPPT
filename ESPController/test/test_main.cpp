@@ -13,21 +13,8 @@
  */
 
 #include "unity.h"
+#include "test_globals.h"
 #include <string.h>
-
-/* ---------------------------------------------------------------------------
- * Globals required by the production code under test.
- * Defined here so they are available to all linked translation units.
- * ------------------------------------------------------------------------- */
-
-#include "defines.h"
-#include "Rules.h"
-
-/** Global settings (referenced via extern in mppt_canbus.h) */
-diybms_eeprom_settings mysettings;
-
-/** Global rules object (referenced via extern in mppt_canbus.h) */
-Rules rules;
 
 /* ---------------------------------------------------------------------------
  * Forward declarations – MPPT CAN bus tests

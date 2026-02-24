@@ -191,8 +191,6 @@ private:
 
 extern MPPTManager mppt_manager;
 
-extern bool send_ext_canbus_message(uint32_t identifier, const uint8_t *buffer, const uint8_t length);
-
 extern diybms_eeprom_settings mysettings;
 extern Rules rules;
 

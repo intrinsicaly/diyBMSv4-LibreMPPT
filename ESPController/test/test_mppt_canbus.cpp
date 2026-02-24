@@ -13,6 +13,7 @@
  */
 
 #include "unity.h"
+#include "test_globals.h"
 #include "mocks/mock_hal.h"
 #include "mocks/mock_canbus.h"
 #include "mppt_canbus.h"
@@ -101,7 +102,6 @@ void setUp(void)
     g_mgr->init(&g_settings, &g_rules);
 
     /* Clear shared CellModuleInfo array used by PacketReceiveProcessor tests */
-    extern CellModuleInfo cmi[maximum_controller_cell_modules];
     memset(cmi, 0, sizeof(CellModuleInfo) * maximum_controller_cell_modules);
 }
 
