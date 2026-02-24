@@ -49,6 +49,25 @@ esp_err_t post_savebankconfig_json_handler(httpd_req_t *req, bool urlEncoded)
     return SendFailure(req);
 }
 
+esp_err_t post_saveCAN_json_handler(httpd_req_t* req, bool urlEncoded)
+{
+    mysettings.highAvailable = false;  
+
+    if (GetKeyValue(httpbuf, "controllerNet", &mysettings.controllerNet, urlEncoded))
+    {
+    }
+    if (GetKeyValue(httpbuf, "controllerID", &mysettings.controllerID, urlEncoded))
+    {
+    }
+    if (GetKeyValue(httpbuf, "highAvailable", &mysettings.highAvailable, urlEncoded))
+    {
+    }
+    
+    saveConfiguration();
+    return SendSuccess(req);
+
+}
+
 esp_err_t post_saventp_json_handler(httpd_req_t *req, bool urlEncoded)
 {
     // uint32_t tempVariable;
@@ -225,8 +244,8 @@ esp_err_t post_savewificonfigtosdcard_json_handler(httpd_req_t *req, bool)
 {
     if (SaveWIFIJson(&_wificonfig))
     {
-        return SendSuccess(req);
-    }
+    return SendSuccess(req);
+}
 
     return SendFailure(req);
 }
@@ -359,6 +378,11 @@ esp_err_t post_savedisplaysetting_json_handler(httpd_req_t *req, bool urlEncoded
     {
     }
 
+    mysettings.cycleScreen = false; 
+    
+    if (GetKeyValue(httpbuf, "cycleScreen", &mysettings.cycleScreen, urlEncoded))
+    {
+    }
     saveConfiguration();
 
     return SendSuccess(req);
@@ -500,7 +524,7 @@ esp_err_t post_savechargeconfig_json_handler(httpd_req_t *req, bool urlEncoded)
     GetKeyValue(httpbuf, "kneemv", &mysettings.kneemv, urlEncoded);
     GetKeyValue(httpbuf, "cellmaxspikemv", &mysettings.cellmaxspikemv, urlEncoded);
 
-    float temp_float;
+    float temp_float, temp_float2;
 
     if (GetKeyValue(httpbuf, "cur_val1", &temp_float, urlEncoded))
     {
@@ -561,7 +585,13 @@ esp_err_t post_savechargeconfig_json_handler(httpd_req_t *req, bool urlEncoded)
     {
         mysettings.floatvoltage = (uint16_t)(10 * temp_float);
     }
-    GetKeyValue(httpbuf, "floattimer", &mysettings.floatvoltagetimer, urlEncoded);
+
+    if (GetKeyValue(httpbuf, "floatday", &temp_float, urlEncoded) &&
+        GetKeyValue(httpbuf, "floathour", &temp_float2, urlEncoded))
+    {
+        mysettings.floatvoltagetimer = (uint16_t)(temp_float * 1440 + temp_float2 * 60); //we can store up to 44days with uint16_t 
+    }
+
     GetKeyValue(httpbuf, "socresume", &mysettings.stateofchargeresumevalue, urlEncoded);
 
     if (mysettings.protocol == ProtocolEmulation::EMULATION_DISABLED)
@@ -1079,6 +1109,12 @@ esp_err_t post_saverules_json_handler(httpd_req_t *req, bool urlEncoded)
         }
     }
 
+    // pulse time
+    if (GetKeyValue(httpbuf, "pulsetime", &mysettings.pulsetime, urlEncoded))
+    {
+    }
+
+
     // Relay default
     for (int i = 0; i < RELAY_TOTAL; i++)
     {
@@ -1278,7 +1314,7 @@ esp_err_t save_data_handler(httpd_req_t *req)
         return ESP_FAIL;
     }
 
-    std::array<std::string, 32> uri_array = {
+    std::array<std::string, 31> uri_array = {
         "savebankconfig", "saventp", "saveglobalsetting",
         "savemqtt", "saveinfluxdb",
         "saveconfigtofile", "wificonfigtofile",
@@ -1289,10 +1325,9 @@ esp_err_t save_data_handler(httpd_req_t *req)
         "savecurrentmon", "savecmbasic", "savecmadvanced",
         "savecmrelay", "restoreconfig", "savechargeconfig",
         "visibletiles", "dailyahreset", "setsoc",
-        "savenetconfig", "newhaapikey",
-        "savemppt", "mpptcontrol"};
+        "savenetconfig", "newhaapikey", "saveCAN"};
 
-    std::array<std::function<esp_err_t(httpd_req_t * req, bool urlEncoded)>, 32> func_ptr = {
+    std::array<std::function<esp_err_t(httpd_req_t * req, bool urlEncoded)>, 31> func_ptr = {
         post_savebankconfig_json_handler, post_saventp_json_handler, post_saveglobalsetting_json_handler,
         post_savemqtt_json_handler, post_saveinfluxdbsetting_json_handler,
         post_saveconfigurationtoflash_json_handler, post_savewificonfigtosdcard_json_handler,
@@ -1303,8 +1338,7 @@ esp_err_t save_data_handler(httpd_req_t *req)
         post_savecurrentmon_json_handler, post_savecmbasic_json_handler, post_savecmadvanced_json_handler,
         post_savecmrelay_json_handler, post_restoreconfig_json_handler, post_savechargeconfig_json_handler,
         post_visibletiles_json_handler, post_resetdailyahcount_json_handler, post_setsoc_json_handler,
-        post_savenetconfig_json_handler, post_homeassistant_apikey_json_handler,
-        post_savemppt_json_handler, post_mpptcontrol_json_handler};
+        post_savenetconfig_json_handler, post_homeassistant_apikey_json_handler, post_saveCAN_json_handler};
 
     auto name = std::string(req->uri);
 

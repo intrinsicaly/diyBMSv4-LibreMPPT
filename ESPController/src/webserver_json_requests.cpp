@@ -478,13 +478,13 @@ esp_err_t content_handler_identifymodule(httpd_req_t *req)
     ESP_LOGI(TAG, "Identify module %u", c);
     if (prg.sendIdentifyModuleRequest(c))
     {
-      return SendSuccess(req);
-    }
+    return SendSuccess(req);
+  }
   }
 
-  // It failed!
-  return httpd_resp_send_500(req);
-}
+    // It failed!
+    return httpd_resp_send_500(req);
+  }
 
 esp_err_t content_handler_modules(httpd_req_t *req)
 {
@@ -520,33 +520,33 @@ esp_err_t content_handler_modules(httpd_req_t *req)
     return httpd_resp_send_500(req);
   }
 
-  if (cmi[c].settingsCached == false)
-  {
-    prg.sendGetSettingsRequest(c);
-  }
+    if (cmi[c].settingsCached == false)
+    {
+      prg.sendGetSettingsRequest(c);
+    }
 
   JsonDocument doc;
   JsonObject root = doc.to<JsonObject>();
   JsonObject settings = root["settings"].to<JsonObject>();
 
-  uint8_t b = c / mysettings.totalNumberOfSeriesModules;
-  uint8_t m = c - (b * mysettings.totalNumberOfSeriesModules);
-  settings["bank"] = b;
-  settings["module"] = m;
-  settings["id"] = c;
-  settings["ver"] = cmi[c].BoardVersionNumber;
-  settings["code"] = cmi[c].CodeVersionNumber;
-  settings["Cached"] = cmi[c].settingsCached;
+    uint8_t b = c / mysettings.totalNumberOfSeriesModules;
+    uint8_t m = c - (b * mysettings.totalNumberOfSeriesModules);
+    settings["bank"] = b;
+    settings["module"] = m;
+    settings["id"] = c;
+    settings["ver"] = cmi[c].BoardVersionNumber;
+    settings["code"] = cmi[c].CodeVersionNumber;
+    settings["Cached"] = cmi[c].settingsCached;
 
-  if (cmi[c].settingsCached)
-  {
-    settings["BypassOverTempShutdown"] = cmi[c].BypassOverTempShutdown;
-    settings["BypassThresholdmV"] = cmi[c].BypassThresholdmV;
-    settings["LoadRes"] = cmi[c].LoadResistance;
-    settings["Calib"] = cmi[c].Calibration;
-    settings["mVPerADC"] = cmi[c].mVPerADC;
-    settings["IntBCoef"] = cmi[c].Internal_BCoefficient;
-    settings["ExtBCoef"] = cmi[c].External_BCoefficient;
+    if (cmi[c].settingsCached)
+    {
+      settings["BypassOverTempShutdown"] = cmi[c].BypassOverTempShutdown;
+      settings["BypassThresholdmV"] = cmi[c].BypassThresholdmV;
+      settings["LoadRes"] = cmi[c].LoadResistance;
+      settings["Calib"] = cmi[c].Calibration;
+      settings["mVPerADC"] = cmi[c].mVPerADC;
+      settings["IntBCoef"] = cmi[c].Internal_BCoefficient;
+      settings["ExtBCoef"] = cmi[c].External_BCoefficient;
     settings["Prohibited"] = cmi[c].ChangesProhibited;
     settings["FanSwitchOnT"] = cmi[c].FanSwitchOnTemperature;
     settings["RelayMinV"] = cmi[c].RelayMinmV;
@@ -554,12 +554,12 @@ esp_err_t content_handler_modules(httpd_req_t *req)
     settings["Parasite"] = cmi[c].ParasiteVoltagemV;
     settings["RunAwayMinmV"] = cmi[c].RunAwayCellMinimumVoltagemV;
     settings["RunAwayDiffmV"] = cmi[c].RunAwayCellDifferentialmV;
-  }
+    }
 
-  int bufferused = 0;
-  bufferused += serializeJson(doc, httpbuf, BUFSIZE);
-  return httpd_resp_send(req, httpbuf, bufferused);
-}
+    int bufferused = 0;
+    bufferused += serializeJson(doc, httpbuf, BUFSIZE);
+    return httpd_resp_send(req, httpbuf, bufferused);
+  }
 
 esp_err_t content_handler_avrstatus(httpd_req_t *req)
 {
@@ -637,7 +637,12 @@ esp_err_t content_handler_chargeconfig(httpd_req_t *req)
   settings["cur_val2"] = mysettings.current_value2;
 
   settings["absorptimer"] = mysettings.absorptiontimer;
-  settings["floattimer"] = mysettings.floatvoltagetimer;
+
+  float hrs_quarter = std::round(((float)mysettings.floatvoltagetimer / 60) * 4) / 4; // round minutes to nearest quarter hour
+  float days = std::trunc(hrs_quarter / 24);
+
+  settings["floatday"] =  days; // # of days;
+  settings["floathour"] = hrs_quarter - 24 * days; //remaining hours
   settings["socresume"] = mysettings.stateofchargeresumevalue;
   settings["floatvolt"] = mysettings.floatvoltage;
 
@@ -663,7 +668,8 @@ esp_err_t content_handler_rules(httpd_req_t *req)
   }
 
   root["ControlState"] = _controller_state;
-
+  root["pulsetime"] = mysettings.pulsetime;
+  
   JsonArray defaultArray = root["relaydefault"].to<JsonArray>();
   for (auto v : mysettings.rulerelaydefault)
   {
@@ -755,6 +761,12 @@ esp_err_t content_handler_settings(httpd_req_t *req)
   settings["DST"] = mysettings.daylight;
 
   settings["HostName"] = hostname.c_str();
+
+  settings["controllerNet"] = mysettings.controllerNet;
+  settings["controllerID"] = mysettings.controllerID;
+  settings["highAvailable"] = mysettings.highAvailable;
+
+  settings["cycleScreen"] = mysettings.cycleScreen;
 
   time_t now;
   if (time(&now))
