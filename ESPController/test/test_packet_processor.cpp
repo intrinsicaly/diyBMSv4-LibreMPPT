@@ -11,19 +11,10 @@
  */
 
 #include "unity.h"
+#include "test_globals.h"
 #include "mocks/mock_hal.h"
 #include "PacketReceiveProcessor.h"
 #include "crc16.h"
-
-/* ---------------------------------------------------------------------------
- * Globals required by PacketReceiveProcessor and defines.h
- * ------------------------------------------------------------------------- */
-
-/** Global CellModuleInfo array referenced throughout the codebase */
-CellModuleInfo cmi[maximum_controller_cell_modules];
-
-/** Voltage snapshot task handle – NULL is fine for unit tests */
-TaskHandle_t voltageandstatussnapshot_task_handle = nullptr;
 
 /* ---------------------------------------------------------------------------
  * Helper utilities

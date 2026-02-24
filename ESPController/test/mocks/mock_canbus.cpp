@@ -58,12 +58,3 @@ const SentCANMessage *MockCANBus::getSentAt(int index) const
     if (index < 0 || index >= sent_count) return nullptr;
     return &_sent[index];
 }
-
-/* ---------------------------------------------------------------------------
- * C-linkage stub that production code calls
- * ------------------------------------------------------------------------- */
-
-bool send_ext_canbus_message(uint32_t identifier, const uint8_t *buffer, const uint8_t length)
-{
-    return MockCANBus::instance().transmit(identifier, buffer, length);
-}

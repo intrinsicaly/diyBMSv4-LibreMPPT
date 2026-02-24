@@ -3,7 +3,7 @@ static constexpr const char *const TAG = "diybms-mppt";
 
 #include "mppt_canbus.h"
 #include "mppt_config.h"
-#include <esp_timer.h>
+#include "mppt_port.h"
 #include <string.h>
 #include <stdio.h>
 
@@ -96,7 +96,7 @@ void MPPTManager::update()
 {
     if (!_settings || !_settings->mppt_can_enabled) return;
 
-    int64_t now = esp_timer_get_time();
+    int64_t now = mppt_now_us();
 
 #ifdef MPPT_MOCK_MODE
     if (_settings->mppt_mock_mode_enabled)
@@ -198,7 +198,7 @@ void MPPTManager::processReceivedMessage(const twai_message_t *msg)
 
         if (idx >= 0)
         {
-            _devices[idx].last_seen_us = esp_timer_get_time();
+            _devices[idx].last_seen_us = mppt_now_us();
             _devices[idx].status = MPPT_ONLINE;
             _devices[idx].total_messages_received++;
 
@@ -390,7 +390,7 @@ const MPPTDevice *MPPTManager::getDevice(uint8_t index) const
 
 void MPPTManager::logError(const char* context, const char* message)
 {
-    _error_stats.last_error_timestamp = (uint32_t)(esp_timer_get_time() / 1000000LL);
+    _error_stats.last_error_timestamp = (uint32_t)(mppt_now_us() / 1000000LL);
     snprintf(_error_stats.last_error_message, sizeof(_error_stats.last_error_message),
              "%s: %s", context, message);
     ESP_LOGE(TAG, "[%s] %s", context, message);
@@ -440,7 +440,7 @@ bool MPPTManager::sendWithRetry(uint32_t can_id, const uint8_t* data, uint8_t le
 
     // Check if we're in backoff period
     if (retry.in_backoff) {
-        uint32_t now = (uint32_t)(esp_timer_get_time() / 1000LL);
+        uint32_t now = (uint32_t)(mppt_now_us() / 1000LL);
         if (now < retry.next_retry_time) {
             ESP_LOGD(TAG, "Device %u in backoff, waiting %ums",
                      device_idx, retry.next_retry_time - now);
@@ -450,7 +450,7 @@ bool MPPTManager::sendWithRetry(uint32_t can_id, const uint8_t* data, uint8_t le
     }
 
     // Attempt to send
-    if (send_ext_canbus_message(can_id, data, len)) {
+    if (mppt_can_send(can_id, data, len)) {
         // Success - reset retry state
         retry.retry_count = 0;
         retry.in_backoff = false;
@@ -471,7 +471,7 @@ bool MPPTManager::sendWithRetry(uint32_t can_id, const uint8_t* data, uint8_t le
 
     // Calculate backoff delay
     uint32_t backoff_ms = calculateBackoffDelay(retry.retry_count);
-    retry.next_retry_time = (uint32_t)(esp_timer_get_time() / 1000LL) + backoff_ms;
+    retry.next_retry_time = (uint32_t)(mppt_now_us() / 1000LL) + backoff_ms;
     retry.in_backoff = true;
 
     ESP_LOGW(TAG, "Send failed for device %u, retry %u/%u in %ums",
@@ -495,7 +495,7 @@ void MPPTManager::transitionDeviceState(MPPTDevice* device, DeviceState new_stat
     DeviceState old_state = device->state;
     device->previous_state = old_state;
     device->state = new_state;
-    device->state_entered_time = esp_timer_get_time();
+    device->state_entered_time = mppt_now_us();
     device->state_transition_count++;
 
     // Update legacy status field for backward compatibility
@@ -547,7 +547,7 @@ void MPPTManager::updateDeviceStateMachine(MPPTDevice* device)
 {
     if (!device || device->node_id == 0) return;
 
-    int64_t now = esp_timer_get_time();
+    int64_t now = mppt_now_us();
     int64_t time_since_seen = now - device->last_seen_us;
 
     switch (device->state) {
@@ -614,10 +614,10 @@ const char* MPPTManager::getDeviceStateName(uint16_t node_id)
 
 void MPPTManager::updateStatistics()
 {
-    _statistics.uptime_seconds = (uint32_t)(esp_timer_get_time() / 1000000LL);
+    _statistics.uptime_seconds = (uint32_t)(mppt_now_us() / 1000000LL);
 
     // Update per-device uptime percentage
-    int64_t now = esp_timer_get_time();
+    int64_t now = mppt_now_us();
     for (int i = 0; i < MAX_MPPT_DEVICES; i++) {
         MPPTDevice& dev = _devices[i];
         if (dev.node_id == 0) continue;
@@ -681,7 +681,7 @@ void MPPTManager::dumpDiagnostics()
         if (dev.node_id == 0) continue;
 
         /* now is used by ESP_LOGI below (suppressed as no-op in test builds) */
-        int64_t now = esp_timer_get_time();
+        int64_t now = mppt_now_us();
         (void)now;
         ESP_LOGI(TAG, "  [%d] MPPT 0x%04X:", i, dev.node_id);
         ESP_LOGI(TAG, "    State: %s (for %lld ms)",
@@ -709,7 +709,7 @@ void MPPTManager::dumpDeviceDetail(uint16_t node_id)
 
     /* device and now are used by ESP_LOGI below (suppressed as no-op in test builds) */
     MPPTDevice& device = _devices[idx];
-    int64_t now = esp_timer_get_time();
+    int64_t now = mppt_now_us();
     (void)device;
     (void)now;
 
@@ -770,7 +770,7 @@ void MPPTManager::sendDiscovery()
 {
     uint32_t can_id = THINGSET_REQRESP_BASE | (5UL << 20) | THINGSET_BROADCAST_ID;
     uint8_t buf[] = {0xA1, 0x19, 0x1D, 0x00};
-    if (!send_ext_canbus_message(can_id, buf, sizeof(buf))) {
+    if (!mppt_can_send(can_id, buf, sizeof(buf))) {
         _error_stats.total_send_failures++;
         logError("sendDiscovery", "Failed to send CAN broadcast");
 
@@ -789,7 +789,7 @@ void MPPTManager::checkTimeouts()
 {
     if (!_settings) return;
 
-    int64_t now = esp_timer_get_time();
+    int64_t now = mppt_now_us();
     int64_t timeout_us = TIMEOUT_US(_settings->mppt_timeout_seconds);
 
     if (xSemaphoreTake(mutex, pdMS_TO_TICKS(50)) == pdTRUE)
@@ -830,10 +830,10 @@ void MPPTManager::registerDevice(uint16_t node_id)
             _devices[_device_count].node_id = node_id;
             _devices[_device_count].status = MPPT_ONLINE;
             _devices[_device_count].charging_enabled = true;
-            _devices[_device_count].last_seen_us = esp_timer_get_time();
+            _devices[_device_count].last_seen_us = mppt_now_us();
             _devices[_device_count].state = DeviceState::DISCOVERING;
             _devices[_device_count].previous_state = DeviceState::UNKNOWN;
-            _devices[_device_count].state_entered_time = esp_timer_get_time();
+            _devices[_device_count].state_entered_time = mppt_now_us();
             _device_count++;
         }
     }
@@ -875,7 +875,7 @@ void MPPTManager::encodeCborBool(uint8_t *buf, uint8_t &pos, uint16_t obj_id, bo
 void MPPTManager::sendThingSetRequest(uint16_t target_id, const uint8_t *data, uint8_t len)
 {
     uint32_t can_id = THINGSET_REQRESP_BASE | (5UL << 20) | ((uint32_t)target_id & 0xFFFF);
-    if (!send_ext_canbus_message(can_id, data, len)) {
+    if (!mppt_can_send(can_id, data, len)) {
         _error_stats.total_send_failures++;
         ESP_LOGW(TAG, "Failed to send ThingSet request to 0x%04X", target_id);
     } else {
@@ -888,7 +888,7 @@ void MPPTManager::updateMockDevices()
 {
     if (!_settings) return;
 
-    int64_t now = esp_timer_get_time();
+    int64_t now = mppt_now_us();
     if ((now - _mock_last_update_us) < 1000000LL) return;  // update every second
     _mock_last_update_us = now;
 

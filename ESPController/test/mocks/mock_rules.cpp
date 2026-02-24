@@ -26,9 +26,9 @@ void Rules::ProcessBank(uint8_t) {}
 void Rules::SetWarning(InternalWarningCode) {}
 void Rules::SetError(InternalErrorCode) {}
 
-bool Rules::SharedChargingDischargingRules(const diybms_eeprom_settings *) { return false; }
-bool Rules::IsChargeAllowed(const diybms_eeprom_settings *)    { return true; }
-bool Rules::IsDischargeAllowed(const diybms_eeprom_settings *) { return true; }
+bool Rules::SharedChargingDischargingRules(const diybms_eeprom_settings *) const { return false; }
+bool Rules::IsChargeAllowed(const diybms_eeprom_settings *) const  { return true; }
+bool Rules::IsDischargeAllowed(const diybms_eeprom_settings *)     { return true; }
 
 void Rules::CalculateChargingMode(const diybms_eeprom_settings *, const currentmonitoring_struct *) {}
 void Rules::CalculateDynamicChargeVoltage(const diybms_eeprom_settings *, const CellModuleInfo *) {}

@@ -48,11 +48,6 @@ jobs:
           sudo apt-get update -y
           sudo apt-get install -y clang-tidy cmake build-essential
 
-      - name: Clone Unity for compilation database
-        run: |
-          git clone --depth 1 https://github.com/ThrowTheSwitch/Unity.git \
-            ESPController/test/unity
-
       - name: Generate compile_commands.json
         run: |
           cmake \
@@ -66,8 +61,7 @@ jobs:
             -p ESPController/test/build \
             --checks='-*,clang-analyzer-*,bugprone-*,performance-*' \
             --warnings-as-errors='' \
-            ESPController/src/mppt_canbus.cpp \
-          || true
+            ESPController/src/mppt_canbus.cpp
 
       - name: Run clang-tidy on Packet Processor
         run: |
@@ -75,5 +69,5 @@ jobs:
             -p ESPController/test/build \
             --checks='-*,clang-analyzer-*,bugprone-*,performance-*' \
             --warnings-as-errors='' \
-            ESPController/src/PacketReceiveProcessor.cpp \
-          || true
+            ESPController/src/PacketReceiveProcessor.cpp
+
