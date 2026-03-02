@@ -85,10 +85,15 @@ static void encode_cbor_small_uint(uint8_t *buf, uint16_t obj_id, uint8_t value)
 }
 
 /**
- * Encode a 9-byte CBOR float32 message for CAN FD frames.
+ * Encode a 9-byte CBOR float32 payload into buf.
  *
  * Format: 0xA1 0x19 <ID_HI> <ID_LO> 0xFA <F3> <F2> <F1> <F0>
- * (float is big-endian in CBOR, little-endian in memory on this CPU)
+ * (float bytes are big-endian in CBOR; bswap from native little-endian)
+ *
+ * NOTE: This 9-byte payload exceeds a classical 8-byte CAN frame. In this
+ * native test build the mock twai_message_t provides a 16-byte data buffer
+ * and the DLC guard accepts values up to sizeof(msg->data), allowing the
+ * float32 decode path to be exercised without modifying production logic.
  */
 static void encode_cbor_float32(uint8_t *buf, uint16_t obj_id, float value)
 {
@@ -104,7 +109,11 @@ static void encode_cbor_float32(uint8_t *buf, uint16_t obj_id, float value)
 }
 
 /**
- * Build a 9-byte float32 pub/sub CAN message (DLC=9, requires extended mock).
+ * Build a 9-byte CBOR float32 pub/sub message for the native test mock.
+ *
+ * data_length_code is set to 9. The mock twai_message_t has a 16-byte data
+ * buffer and the DLC guard accepts up to sizeof(msg->data), so this frame
+ * passes validation and exercises the float32 decode path in the SUT.
  */
 static twai_message_t make_float32_msg(uint16_t source_id,
                                        uint16_t obj_id, float value)
@@ -406,7 +415,7 @@ void test_mppt_invalid_dlc(void)
     twai_message_t msg;
     memset(&msg, 0, sizeof(msg));
     msg.identifier       = THINGSET_PUBSUB_BASE | (uint32_t)THINGSET_MPPT_ID_MIN;
-    msg.data_length_code = 16; /* invalid: exceeds maximum DLC of 15 */
+    msg.data_length_code = sizeof(msg.data) + 1; /* one beyond the data buffer size */
     msg.extd             = true;
 
     g_mgr->processReceivedMessage(&msg);
@@ -594,7 +603,8 @@ void test_mppt_validation_error_out_of_range(void)
  * Test 25: recovers to ONLINE state after new message in TIMEOUT_WARNING
  * ------------------------------------------------------------------------- */
 
-void test_mppt_state_machine_recovery(void){
+void test_mppt_state_machine_recovery(void)
+{
     MockHAL::instance().setTime(0);
 
     uint8_t payload[5];
@@ -649,8 +659,9 @@ void test_mppt_float32_solar_voltage_out_of_range(void)
 {
     g_mgr->resetErrorStats();
 
-    /* 300 V exceeds MAX_SOLAR_VOLTAGE (200 V) */
-    twai_message_t msg = make_float32_msg(THINGSET_MPPT_ID_MIN, THINGSET_ID_V_SOLAR, 300.0f);
+    /* Value strictly above MPPTConfig::MAX_SOLAR_VOLTAGE */
+    twai_message_t msg = make_float32_msg(THINGSET_MPPT_ID_MIN, THINGSET_ID_V_SOLAR,
+                                          MPPTConfig::MAX_SOLAR_VOLTAGE + 1.0f);
     g_mgr->processReceivedMessage(&msg);
 
     TEST_ASSERT_EQUAL_UINT32(1, g_mgr->getErrorStats()->total_validation_errors);
@@ -684,8 +695,9 @@ void test_mppt_float32_solar_current_out_of_range(void)
 {
     g_mgr->resetErrorStats();
 
-    /* 200 A exceeds MAX_CURRENT (100 A) */
-    twai_message_t msg = make_float32_msg(THINGSET_MPPT_ID_MIN, THINGSET_ID_I_SOLAR, 200.0f);
+    /* Value strictly above MPPTConfig::MAX_CURRENT */
+    twai_message_t msg = make_float32_msg(THINGSET_MPPT_ID_MIN, THINGSET_ID_I_SOLAR,
+                                          MPPTConfig::MAX_CURRENT + 1.0f);
     g_mgr->processReceivedMessage(&msg);
 
     TEST_ASSERT_EQUAL_UINT32(1, g_mgr->getErrorStats()->total_validation_errors);
@@ -719,8 +731,9 @@ void test_mppt_float32_solar_power_out_of_range(void)
 {
     g_mgr->resetErrorStats();
 
-    /* 20000 W exceeds MAX_POWER (10000 W) */
-    twai_message_t msg = make_float32_msg(THINGSET_MPPT_ID_MIN, THINGSET_ID_P_SOLAR, 20000.0f);
+    /* Value strictly above MPPTConfig::MAX_POWER */
+    twai_message_t msg = make_float32_msg(THINGSET_MPPT_ID_MIN, THINGSET_ID_P_SOLAR,
+                                          MPPTConfig::MAX_POWER + 1.0f);
     g_mgr->processReceivedMessage(&msg);
 
     TEST_ASSERT_EQUAL_UINT32(1, g_mgr->getErrorStats()->total_validation_errors);
@@ -754,8 +767,9 @@ void test_mppt_float32_battery_voltage_out_of_range(void)
 {
     g_mgr->resetErrorStats();
 
-    /* 300 V exceeds MAX_BATTERY_VOLTAGE (200 V) */
-    twai_message_t msg = make_float32_msg(THINGSET_MPPT_ID_MIN, THINGSET_ID_V_BAT, 300.0f);
+    /* Value strictly above MPPTConfig::MAX_BATTERY_VOLTAGE */
+    twai_message_t msg = make_float32_msg(THINGSET_MPPT_ID_MIN, THINGSET_ID_V_BAT,
+                                          MPPTConfig::MAX_BATTERY_VOLTAGE + 1.0f);
     g_mgr->processReceivedMessage(&msg);
 
     TEST_ASSERT_EQUAL_UINT32(1, g_mgr->getErrorStats()->total_validation_errors);
@@ -789,8 +803,9 @@ void test_mppt_float32_battery_current_out_of_range(void)
 {
     g_mgr->resetErrorStats();
 
-    /* -200 A is below MIN_CURRENT (-100 A) */
-    twai_message_t msg = make_float32_msg(THINGSET_MPPT_ID_MIN, THINGSET_ID_I_BAT, -200.0f);
+    /* Value strictly below MPPTConfig::MIN_CURRENT */
+    twai_message_t msg = make_float32_msg(THINGSET_MPPT_ID_MIN, THINGSET_ID_I_BAT,
+                                          MPPTConfig::MIN_CURRENT - 1.0f);
     g_mgr->processReceivedMessage(&msg);
 
     TEST_ASSERT_EQUAL_UINT32(1, g_mgr->getErrorStats()->total_validation_errors);
@@ -818,7 +833,7 @@ void test_mppt_send_with_retry_success(void)
     MockCANBus::instance().reset();
     g_mgr->resetErrorStats();
 
-    bool ok = g_mgr->sendWithRetry(g_dummy_can_id, g_dummy_data, sizeof(g_dummy_data), 0);
+    bool ok = g_mgr->test_sendWithRetry(g_dummy_can_id, g_dummy_data, sizeof(g_dummy_data), 0);
 
     TEST_ASSERT_TRUE(ok);
     TEST_ASSERT_EQUAL_INT(1, MockCANBus::instance().getSentCount());
@@ -837,7 +852,7 @@ void test_mppt_send_with_retry_fail_enters_backoff(void)
 
     MockCANBus::instance().should_fail_transmit = true;
 
-    bool ok = g_mgr->sendWithRetry(g_dummy_can_id, g_dummy_data, sizeof(g_dummy_data), 0);
+    bool ok = g_mgr->test_sendWithRetry(g_dummy_can_id, g_dummy_data, sizeof(g_dummy_data), 0);
 
     TEST_ASSERT_FALSE(ok);
     TEST_ASSERT_EQUAL_INT(0, MockCANBus::instance().getSentCount());
@@ -858,11 +873,11 @@ void test_mppt_send_with_retry_backoff_respected(void)
     MockCANBus::instance().should_fail_transmit = true;
 
     /* First call – fails and enters backoff */
-    g_mgr->sendWithRetry(g_dummy_can_id, g_dummy_data, sizeof(g_dummy_data), 0);
+    g_mgr->test_sendWithRetry(g_dummy_can_id, g_dummy_data, sizeof(g_dummy_data), 0);
     TEST_ASSERT_EQUAL_UINT32(1, g_mgr->getErrorStats()->total_send_failures);
 
     /* Second call immediately (still in backoff) – must not count as another failure */
-    bool ok = g_mgr->sendWithRetry(g_dummy_can_id, g_dummy_data, sizeof(g_dummy_data), 0);
+    bool ok = g_mgr->test_sendWithRetry(g_dummy_can_id, g_dummy_data, sizeof(g_dummy_data), 0);
     TEST_ASSERT_FALSE(ok);
     TEST_ASSERT_EQUAL_UINT32(1, g_mgr->getErrorStats()->total_send_failures);
 }
@@ -879,15 +894,17 @@ void test_mppt_send_with_retry_backoff_expires(void)
 
     MockCANBus::instance().should_fail_transmit = true;
 
-    /* First failure at t=0: retry_count=1, backoff = initial(100)*2^1 = 200 ms */
-    g_mgr->sendWithRetry(g_dummy_can_id, g_dummy_data, sizeof(g_dummy_data), 0);
+    /* First failure at t=0: retry_count becomes 1,
+     * backoff = INITIAL_RETRY_DELAY_MS * 2^1 */
+    g_mgr->test_sendWithRetry(g_dummy_can_id, g_dummy_data, sizeof(g_dummy_data), 0);
     TEST_ASSERT_EQUAL_UINT32(1, g_mgr->getErrorStats()->total_send_failures);
 
-    /* Advance 250 ms – past the 200 ms backoff */
-    MockHAL::instance().setTime(250LL * 1000LL);
+    /* Advance past the first backoff window */
+    uint32_t backoff_ms = MPPTConfig::INITIAL_RETRY_DELAY_MS * 2U;
+    MockHAL::instance().setTime((int64_t)(backoff_ms + 50) * 1000LL);
 
     /* Next call after backoff should attempt and fail again (failure count rises) */
-    g_mgr->sendWithRetry(g_dummy_can_id, g_dummy_data, sizeof(g_dummy_data), 0);
+    g_mgr->test_sendWithRetry(g_dummy_can_id, g_dummy_data, sizeof(g_dummy_data), 0);
     TEST_ASSERT_EQUAL_UINT32(2, g_mgr->getErrorStats()->total_send_failures);
 }
 
@@ -900,8 +917,8 @@ void test_mppt_send_with_retry_invalid_device_idx(void)
     MockCANBus::instance().reset();
     g_mgr->resetErrorStats();
 
-    bool ok = g_mgr->sendWithRetry(g_dummy_can_id, g_dummy_data, sizeof(g_dummy_data),
-                                   MAX_MPPT_DEVICES /* out of range */);
+    bool ok = g_mgr->test_sendWithRetry(g_dummy_can_id, g_dummy_data, sizeof(g_dummy_data),
+                                        MAX_MPPT_DEVICES /* out of range */);
     TEST_ASSERT_FALSE(ok);
     TEST_ASSERT_EQUAL_INT(0, MockCANBus::instance().getSentCount());
 }
@@ -913,14 +930,16 @@ void test_mppt_send_with_retry_invalid_device_idx(void)
 
 void test_mppt_backoff_delay_exponential(void)
 {
-    /* Default config: initial=100 ms, max=5000 ms, exponential=true */
-    uint32_t d0 = g_mgr->calculateBackoffDelay(0);
-    uint32_t d1 = g_mgr->calculateBackoffDelay(1);
-    uint32_t d2 = g_mgr->calculateBackoffDelay(2);
+    /* Default config: exponential backoff based on INITIAL_RETRY_DELAY_MS */
+    uint32_t initial = MPPTConfig::INITIAL_RETRY_DELAY_MS;
 
-    TEST_ASSERT_EQUAL_UINT32(100,  d0); /* 100 * 2^0 = 100 */
-    TEST_ASSERT_EQUAL_UINT32(200,  d1); /* 100 * 2^1 = 200 */
-    TEST_ASSERT_EQUAL_UINT32(400,  d2); /* 100 * 2^2 = 400 */
+    uint32_t d0 = g_mgr->test_calculateBackoffDelay(0);
+    uint32_t d1 = g_mgr->test_calculateBackoffDelay(1);
+    uint32_t d2 = g_mgr->test_calculateBackoffDelay(2);
+
+    TEST_ASSERT_EQUAL_UINT32(initial,       d0); /* initial * 2^0 */
+    TEST_ASSERT_EQUAL_UINT32(initial * 2U,  d1); /* initial * 2^1 */
+    TEST_ASSERT_EQUAL_UINT32(initial * 4U,  d2); /* initial * 2^2 */
 }
 
 /* ---------------------------------------------------------------------------
@@ -929,8 +948,8 @@ void test_mppt_backoff_delay_exponential(void)
 
 void test_mppt_backoff_delay_capped(void)
 {
-    /* retry_count=8: 100 * 2^8 = 25600, exceeds max of 5000 → capped */
-    uint32_t delay = g_mgr->calculateBackoffDelay(8);
+    /* retry_count=8: INITIAL * 2^8 = INITIAL*256, exceeds MAX_RETRY_DELAY_MS → capped */
+    uint32_t delay = g_mgr->test_calculateBackoffDelay(8);
     TEST_ASSERT_EQUAL_UINT32(MPPTConfig::MAX_RETRY_DELAY_MS, delay);
 }
 
@@ -948,9 +967,9 @@ void test_mppt_backoff_delay_linear(void)
     cfg.enable_exponential_backoff = false;
     g_mgr->setRecoveryConfig(cfg);
 
-    TEST_ASSERT_EQUAL_UINT32(150, g_mgr->calculateBackoffDelay(0));
-    TEST_ASSERT_EQUAL_UINT32(150, g_mgr->calculateBackoffDelay(3));
-    TEST_ASSERT_EQUAL_UINT32(150, g_mgr->calculateBackoffDelay(7));
+    TEST_ASSERT_EQUAL_UINT32(150, g_mgr->test_calculateBackoffDelay(0));
+    TEST_ASSERT_EQUAL_UINT32(150, g_mgr->test_calculateBackoffDelay(3));
+    TEST_ASSERT_EQUAL_UINT32(150, g_mgr->test_calculateBackoffDelay(7));
 
     /* Restore default config so later tests are unaffected */
     MPPTManager::RecoveryConfig def;
