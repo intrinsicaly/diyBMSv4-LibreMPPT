@@ -152,6 +152,10 @@ public:
     void dumpDeviceDetail(uint16_t node_id);
     void handleDegradedOperation();
 
+    // Retry helpers (public for testability)
+    bool sendWithRetry(uint32_t can_id, const uint8_t* data, uint8_t len, uint8_t device_idx);
+    uint32_t calculateBackoffDelay(uint8_t retry_count);
+
     SemaphoreHandle_t mutex;
 
 private:
@@ -180,8 +184,6 @@ private:
     void encodeCborFloat(uint8_t *buf, uint8_t &pos, uint16_t obj_id, float value);
     void encodeCborBool(uint8_t *buf, uint8_t &pos, uint16_t obj_id, bool value);
     void sendThingSetRequest(uint16_t target_id, const uint8_t *data, uint8_t len);
-    bool sendWithRetry(uint32_t can_id, const uint8_t* data, uint8_t len, uint8_t device_idx);
-    uint32_t calculateBackoffDelay(uint8_t retry_count);
 
 #ifdef MPPT_MOCK_MODE
     void updateMockDevices();

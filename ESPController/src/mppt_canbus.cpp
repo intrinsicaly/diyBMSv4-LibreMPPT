@@ -167,7 +167,7 @@ void MPPTManager::processReceivedMessage(const twai_message_t *msg)
 {
     if (!_settings || !_settings->mppt_can_enabled) return;
 
-    if (!msg || msg->data_length_code > 8) {
+    if (!msg || msg->data_length_code > 15) {
         ESP_LOGE(TAG, "Invalid CAN message: NULL pointer or invalid DLC");
         _error_stats.total_receive_errors++;
         return;
