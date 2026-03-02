@@ -40,7 +40,7 @@ jobs:
           ls
 
       - name: Build code for ATTINY modules
-        run: pio run --project-dir=/home/runner/work/diyBMSv4ESP32/diyBMSv4ESP32/ATTINYCellModule --project-conf=/home/runner/work/diyBMSv4ESP32/diyBMSv4ESP32/ATTINYCellModule/platformio.ini
+       run: pio run --project-dir=${{ github.workspace }}/ATTINYCellModule --project-conf=${{ github.workspace }}/ATTINYCellModule/platformio.ini
 
       - name: Copy output
         run: |
@@ -48,7 +48,7 @@ jobs:
           cp ./ATTINYCellModule/.pio/build/V*/*.bin ~/OUTPUT/Modules/BIN/
 
       - name: Build code for STM32 modules
-        run: pio run --project-dir=/home/runner/work/diyBMSv4ESP32/diyBMSv4ESP32/STM32All-In-One --project-conf=/home/runner/work/diyBMSv4ESP32/diyBMSv4ESP32/STM32All-In-One/platformio.ini
+        run: pio run --project-dir=${{ github.workspace }}/STM32All-In-One --project-conf=${{ github.workspace }}/STM32All-In-One/platformio.ini
   
       - name: Copy STM32 binary firmware output files
         run: |
@@ -56,7 +56,7 @@ jobs:
   
 
       - name: Build code for ESP32 controller
-        run: pio run --project-dir=/home/runner/work/diyBMSv4ESP32/diyBMSv4ESP32/ESPController --environment esp32-devkitc --project-conf=/home/runner/work/diyBMSv4ESP32/diyBMSv4ESP32/ESPController/platformio.ini
+        run: pio run --project-dir=${{ github.workspace }}/ESPController --environment esp32-devkitc --project-conf=${{ github.workspace }}/ESPController/platformio.ini
 
       - name: Copy output
         run: |
