@@ -152,6 +152,19 @@ public:
     void dumpDeviceDetail(uint16_t node_id);
     void handleDegradedOperation();
 
+#ifdef DIYBMS_MPPT_TESTING
+    /* Test-only accessors – compiled in only for the native unit-test build */
+    bool test_sendWithRetry(uint32_t can_id, const uint8_t *data, uint8_t len,
+                            uint8_t device_idx)
+    {
+        return sendWithRetry(can_id, data, len, device_idx);
+    }
+    uint32_t test_calculateBackoffDelay(uint8_t retry_count)
+    {
+        return calculateBackoffDelay(retry_count);
+    }
+#endif
+
     SemaphoreHandle_t mutex;
 
 private:

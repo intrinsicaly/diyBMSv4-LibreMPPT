@@ -48,6 +48,28 @@ void test_mppt_device_state_to_string(void);
 void test_mppt_validation_error_out_of_range(void);
 void test_mppt_state_machine_recovery(void);
 
+/* Float32 telemetry decode tests */
+void test_mppt_float32_solar_voltage(void);
+void test_mppt_float32_solar_voltage_out_of_range(void);
+void test_mppt_float32_solar_current(void);
+void test_mppt_float32_solar_current_out_of_range(void);
+void test_mppt_float32_solar_power(void);
+void test_mppt_float32_solar_power_out_of_range(void);
+void test_mppt_float32_battery_voltage(void);
+void test_mppt_float32_battery_voltage_out_of_range(void);
+void test_mppt_float32_battery_current(void);
+void test_mppt_float32_battery_current_out_of_range(void);
+
+/* sendWithRetry and backoff tests */
+void test_mppt_send_with_retry_success(void);
+void test_mppt_send_with_retry_fail_enters_backoff(void);
+void test_mppt_send_with_retry_backoff_respected(void);
+void test_mppt_send_with_retry_backoff_expires(void);
+void test_mppt_send_with_retry_invalid_device_idx(void);
+void test_mppt_backoff_delay_exponential(void);
+void test_mppt_backoff_delay_capped(void);
+void test_mppt_backoff_delay_linear(void);
+
 /* setUp/tearDown for MPPT tests are defined in test_mppt_canbus.cpp */
 void setUp(void);
 void tearDown(void);
@@ -61,6 +83,7 @@ void test_packet_crc(void);
 void test_packet_buffer_overflow(void);
 void test_packet_address_range(void);
 void test_packet_null_pointer(void);
+void test_packet_hops_exceed_maximum(void);
 
 /* ---------------------------------------------------------------------------
  * Main
@@ -101,6 +124,30 @@ int main(void)
     RUN_TEST(test_mppt_validation_error_out_of_range);
     RUN_TEST(test_mppt_state_machine_recovery);
 
+    /* Float32 telemetry decode tests */
+    printf("\n=== MPPT Float32 Telemetry Tests ===\n");
+    RUN_TEST(test_mppt_float32_solar_voltage);
+    RUN_TEST(test_mppt_float32_solar_voltage_out_of_range);
+    RUN_TEST(test_mppt_float32_solar_current);
+    RUN_TEST(test_mppt_float32_solar_current_out_of_range);
+    RUN_TEST(test_mppt_float32_solar_power);
+    RUN_TEST(test_mppt_float32_solar_power_out_of_range);
+    RUN_TEST(test_mppt_float32_battery_voltage);
+    RUN_TEST(test_mppt_float32_battery_voltage_out_of_range);
+    RUN_TEST(test_mppt_float32_battery_current);
+    RUN_TEST(test_mppt_float32_battery_current_out_of_range);
+
+    /* sendWithRetry and backoff delay tests */
+    printf("\n=== MPPT Retry/Backoff Tests ===\n");
+    RUN_TEST(test_mppt_send_with_retry_success);
+    RUN_TEST(test_mppt_send_with_retry_fail_enters_backoff);
+    RUN_TEST(test_mppt_send_with_retry_backoff_respected);
+    RUN_TEST(test_mppt_send_with_retry_backoff_expires);
+    RUN_TEST(test_mppt_send_with_retry_invalid_device_idx);
+    RUN_TEST(test_mppt_backoff_delay_exponential);
+    RUN_TEST(test_mppt_backoff_delay_capped);
+    RUN_TEST(test_mppt_backoff_delay_linear);
+
     /* ---- Packet Processing Tests ---- */
     printf("\n=== Packet Processing Tests ===\n");
 
@@ -109,6 +156,7 @@ int main(void)
     RUN_TEST(test_packet_buffer_overflow);
     RUN_TEST(test_packet_address_range);
     RUN_TEST(test_packet_null_pointer);
+    RUN_TEST(test_packet_hops_exceed_maximum);
 
     return UNITY_END();
 }

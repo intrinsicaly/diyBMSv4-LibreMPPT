@@ -138,3 +138,27 @@ void test_packet_null_pointer(void)
     /* packetsReceived increments even for NULL (matches implementation) */
     TEST_ASSERT_EQUAL_UINT32(1, proc.packetsReceived);
 }
+
+/* ---------------------------------------------------------------------------
+ * Test 6: hops > maximum_controller_cell_modules is rejected and increments
+ *         totalOutofSequenceErrors
+ * ------------------------------------------------------------------------- */
+
+void test_packet_hops_exceed_maximum(void)
+{
+    PacketReceiveProcessor proc;
+
+    PacketStruct pkt;
+    memset(&pkt, 0, sizeof(pkt));
+    pkt.start_address = 0;
+    pkt.end_address   = 0;
+    pkt.hops          = maximum_controller_cell_modules + 1; /* one above the limit */
+    pkt.command       = (uint8_t)(0x80 | COMMAND::ReadVoltageAndStatus);
+    pkt.sequence      = 1;
+    pkt.crc = CRC16::CalculateArray((uint8_t *)&pkt, sizeof(pkt) - 2);
+
+    bool result = proc.ProcessReply(&pkt);
+
+    TEST_ASSERT_FALSE(result);
+    TEST_ASSERT_EQUAL_UINT16(1, proc.totalOutofSequenceErrors);
+}

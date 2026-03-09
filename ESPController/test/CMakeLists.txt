@@ -102,6 +102,10 @@ add_executable(run_tests
 
 target_link_libraries(run_tests unity m)
 
+# Expose test-only hooks (e.g. sendWithRetry/calculateBackoffDelay) via
+# #ifdef DIYBMS_MPPT_TESTING guards in production headers.
+target_compile_definitions(run_tests PRIVATE DIYBMS_MPPT_TESTING)
+
 if(ENABLE_COVERAGE)
     target_link_options(run_tests PRIVATE --coverage)
 endif()
