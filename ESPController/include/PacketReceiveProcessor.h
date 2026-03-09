@@ -9,7 +9,7 @@
 class PacketReceiveProcessor
 {
 public:
-  PacketReceiveProcessor() {}
+  PacketReceiveProcessor() : _packetbuffer{} {}
   ~PacketReceiveProcessor() {}
   bool ProcessReply(const PacketStruct *receivebuffer);
   bool HasCommsTimedOut()  const;

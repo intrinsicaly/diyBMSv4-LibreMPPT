@@ -39,9 +39,9 @@ const char* deviceStateToString(DeviceState state)
 // ----------------------------------------------------------------------------
 
 MPPTManager::MPPTManager()
-    : _device_count(0), _settings(nullptr), _rules(nullptr), _last_discovery_us(0)
+    : _device_count(0), _settings(nullptr), _rules(nullptr), _last_discovery_us(0),
+      mutex(xSemaphoreCreateMutex())
 {
-    mutex = xSemaphoreCreateMutex();
     memset(_devices, 0, sizeof(_devices));
     memset(&_error_stats, 0, sizeof(_error_stats));
     memset(&_statistics, 0, sizeof(_statistics));
