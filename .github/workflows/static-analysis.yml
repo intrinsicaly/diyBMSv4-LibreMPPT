@@ -30,6 +30,7 @@ jobs:
             --suppress=missingInclude \
             --suppress=missingIncludeSystem \
             --suppress=unusedFunction \
+            --quiet \
             --error-exitcode=1 \
             --inline-suppr \
             -I ESPController/include \
