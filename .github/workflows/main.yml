@@ -40,7 +40,7 @@ jobs:
           ls
 
       - name: Build code for ATTINY modules
-       run: pio run --project-dir=${{ github.workspace }}/ATTINYCellModule --project-conf=./ATTINYCellModule/platformio.ini
+        run: pio run --project-dir=${{ github.workspace }}/ATTINYCellModule --project-conf=./ATTINYCellModule/platformio.ini
 
       - name: Copy output
         run: |
