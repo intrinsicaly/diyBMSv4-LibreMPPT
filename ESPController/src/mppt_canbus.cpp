@@ -290,7 +290,7 @@ void MPPTManager::processReceivedMessage(const twai_message_t *msg)
                     }
                 }
                 // small uint (0x00-0x17)
-                else if (len >= 5 && d[4] <= 0x17)
+                else if (d[4] <= 0x17)
                 {
                     if (obj_id == THINGSET_ID_STATE) {
                         _devices[idx].charge_state = d[4];
