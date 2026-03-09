@@ -49,12 +49,12 @@ bool PacketReceiveProcessor::ProcessReply(const PacketStruct *receivebuffer)
   memcpy(&_packetbuffer, receivebuffer, sizeof(_packetbuffer));
 
   // Calculate the CRC and compare to received
-  uint16_t validateCRC = CRC16::CalculateArray((uint8_t *)&_packetbuffer, sizeof(_packetbuffer) - 2);
+  uint16_t validateCRC = CRC16::CalculateArray(reinterpret_cast<uint8_t *>(&_packetbuffer), sizeof(_packetbuffer) - 2);
 
   if (validateCRC == _packetbuffer.crc)
   {
     // Its a valid packet...
-    packetLastReceivedMillisecond = (uint32_t)millis();
+    packetLastReceivedMillisecond = static_cast<uint32_t>(millis());
 
     totalModulesFound = _packetbuffer.hops;
 
@@ -268,7 +268,7 @@ void PacketReceiveProcessor::ProcessReplyAdditionalSettings()
 {
   uint8_t m = _packetbuffer.start_address;
 
-  cmi[m].FanSwitchOnTemperature = (int16_t)_packetbuffer.moduledata[0];
+  cmi[m].FanSwitchOnTemperature = static_cast<int16_t>(_packetbuffer.moduledata[0]);
   cmi[m].RelayMinmV = _packetbuffer.moduledata[1];
   cmi[m].RelayRangemV = _packetbuffer.moduledata[2];
   cmi[m].ParasiteVoltagemV = _packetbuffer.moduledata[3];
