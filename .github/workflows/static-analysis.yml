@@ -33,6 +33,8 @@ jobs:
             --quiet \
             --error-exitcode=1 \
             --inline-suppr \
+            --verbose \
+            --template='{file}:{line}:{severity}:{id}:{message}' \
             -I ESPController/include \
             ESPController/src/mppt_canbus.cpp \
             ESPController/src/PacketReceiveProcessor.cpp
